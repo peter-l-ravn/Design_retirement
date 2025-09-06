@@ -140,6 +140,9 @@ class ModelClass(EconModelClass):
         par.end_before = par.retirement_age-par.replacement_rate_bf_end
         par.after_retirement = par.retirement_age +par.replacement_rate_af_start
 
+        # Dummy
+        par.dummy = 0.0
+
         # State values
         par.unemp = 0
         par.emp = 1

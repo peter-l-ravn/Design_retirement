@@ -21,7 +21,9 @@ import math
 # 1. Essentiel functions for such as utility, bequest, and wage 
 @jit_if_enabled(fastmath=False)
 def utility(par, c, h, k, t):
-    return ((c+1)**(1-par.sigma))/(1-par.sigma) - (par.zeta/(1+k)) * (h**(1+par.gamma))/(1+par.gamma) - par.gamma_1*h*t**2
+    work_dummy = 1 if (t>=par.retirement_age and h==0) else 0
+    return ((c+1)**(1-par.sigma))/(1-par.sigma) + par.dummy*work_dummy - (par.zeta/(1+k)) * (h**(1+par.gamma))/(1+par.gamma) - par.gamma_1*h*t**2
+
 
 @jit_if_enabled(fastmath=False)
 def bequest(par, a):
