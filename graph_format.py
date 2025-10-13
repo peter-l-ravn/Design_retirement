@@ -976,6 +976,183 @@ def plot_model_vs_data_3x2(a_dict, title=None, save_title=None):
     plt.show()
 
 
+def plot_model_vs_data_compact(a_dict, title=None, save_title=None, bottom_key='wages'):
+    import numpy as np
+    import matplotlib.pyplot as plt
+    from matplotlib.gridspec import GridSpec
+
+    # --- layout keys ----------------------------------------------------------
+    preferred_top = ['hours', 'extensive', 'liquid', 'illiquid']
+    top_keys = [k for k in preferred_top if k in a_dict and k != bottom_key]
+    remaining = [k for k in a_dict.keys() if k not in top_keys and k != bottom_key]
+    top_keys += remaining
+    top_keys = top_keys[:4]
+
+    if bottom_key not in a_dict:
+        for k in a_dict:
+            if k not in top_keys:
+                bottom_key = k
+                break
+        else:
+            bottom_key = top_keys[-1]
+
+    # --- helper functions -----------------------------------------------------
+    def age_window_for(key):
+        if key in ['hours', 'extensive']:
+            return 30, 72
+        elif key == 'illiquid':
+            return 30, 100
+        elif key == 'wages':
+            return 30, 60
+        else:
+            return 30, 100
+
+    def style_axis(ax, key):
+        ax.set_title(key.capitalize(), fontsize=11, fontweight="semibold")
+        if key == 'hours':
+            ax.set_ylim(0.2, 1)
+            ax.set_ylabel("Full time equivalent hours", fontsize=11)
+        elif key == 'extensive':
+            ax.set_ylim(0, 1)
+            ax.set_ylabel("Percent", fontsize=11)
+        elif key == 'liquid':
+            ax.set_ylabel("DKK", fontsize=11)
+        elif key == 'illiquid':
+            ax.set_ylim(0, 3)
+            ax.set_ylabel("Million DKK", fontsize=11)
+        elif key == 'wages':
+            ax.set_ylim(400_000, 600_000)
+            ax.set_ylabel("DKK", fontsize=11)
+        ax.grid(True, linestyle="--", alpha=0.6)
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        ax.legend(fontsize=9, loc='best', frameon=True)
+        ax.set_xlabel("Age", fontsize=11)
+        ax.tick_params(labelsize=10)
+
+    def plot_pair(ax, key):
+        sim_data, empirical_data = a_dict[key]
+        T_sim, T_emp = len(sim_data), len(empirical_data)
+        age_start, age_end = age_window_for(key)
+        T = max(T_sim, T_emp)
+        time = np.arange(age_start, age_start + T)
+
+        ax.plot(time[:T_emp], empirical_data, label="Empirical",
+                color=custom_palette[0], linewidth=1.8)
+        ax.plot(time[:T_sim], sim_data, label="Simulated",
+                color=custom_palette[1], linestyle='--', linewidth=1.8)
+
+        ax.set_xlim(age_start, age_end)
+        style_axis(ax, key)
+
+    # --- compact figure layout -----------------------------------------------
+    fig = plt.figure(figsize=(7, 9))  # narrower figure
+    gs = GridSpec(3, 2, height_ratios=[1, 1, 0.9], hspace=0.5, wspace=0.25)
+
+    axes_top = [
+        fig.add_subplot(gs[0, 0]),
+        fig.add_subplot(gs[0, 1]),
+        fig.add_subplot(gs[1, 0]),
+        fig.add_subplot(gs[1, 1]),
+    ]
+    ax_bottom = fig.add_subplot(gs[2, :])
+
+    for ax, key in zip(axes_top, top_keys):
+        plot_pair(ax, key)
+    for ax in axes_top[len(top_keys):]:
+        ax.remove()
+
+    plot_pair(ax_bottom, bottom_key)
+
+    if title:
+        fig.suptitle(title, fontsize=14, fontweight="bold", y=0.98)
+
+    plt.tight_layout()
+    if save_title:
+        save_figure(fig, save_title)
+    plt.show()
+
+def plot_model_vs_data_2x2(a_dict, title=None, save_title=None):
+    import numpy as np
+    import matplotlib.pyplot as plt
+    from matplotlib.gridspec import GridSpec
+
+    # --- layout keys ----------------------------------------------------------
+    preferred_order = ['hours', 'extensive', 'liquid', 'illiquid']
+    top_keys = [k for k in preferred_order if k in a_dict and k != 'wages']
+    remaining = [k for k in a_dict.keys() if k not in top_keys and k != 'wages']
+    top_keys += remaining
+    top_keys = top_keys[:4]
+
+    # --- helper functions -----------------------------------------------------
+    def age_window_for(key):
+        if key in ['hours', 'extensive']:
+            return 30, 72
+        elif key == 'illiquid':
+            return 30, 100
+        else:
+            return 30, 100
+
+    def style_axis(ax, key):
+        ax.set_title(key.capitalize(), fontsize=11, fontweight="semibold")
+        if key == 'hours':
+            ax.set_ylim(0.2, 1)
+            ax.set_ylabel("Full time equivalent hours", fontsize=11)
+        elif key == 'extensive':
+            ax.set_ylim(0, 1)
+            ax.set_ylabel("Percent", fontsize=11)
+        elif key == 'liquid':
+            ax.set_ylabel("DKK", fontsize=11)
+        elif key == 'illiquid':
+            ax.set_ylim(0, 3)
+            ax.set_ylabel("Million DKK", fontsize=11)
+        ax.grid(True, linestyle="--", alpha=0.6)
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        ax.legend(fontsize=9, loc='best', frameon=True)
+        ax.set_xlabel("Age", fontsize=11)
+        ax.tick_params(labelsize=10)
+
+    def plot_pair(ax, key):
+        sim_data, empirical_data = a_dict[key]
+        T_sim, T_emp = len(sim_data), len(empirical_data)
+        age_start, age_end = age_window_for(key)
+        T = max(T_sim, T_emp)
+        time = np.arange(age_start, age_start + T)
+
+        ax.plot(time[:T_emp], empirical_data, label="Empirical",
+                color=custom_palette[0], linewidth=1.8)
+        ax.plot(time[:T_sim], sim_data, label="Simulated",
+                color=custom_palette[1], linestyle='--', linewidth=1.8)
+
+        ax.set_xlim(age_start, age_end)
+        style_axis(ax, key)
+
+    # --- 2x2 figure layout ----------------------------------------------------
+    fig = plt.figure(figsize=(10, 8))
+    gs = GridSpec(2, 2, hspace=0.4, wspace=0.3)
+
+    axes = [
+        fig.add_subplot(gs[0, 0]),
+        fig.add_subplot(gs[0, 1]),
+        fig.add_subplot(gs[1, 0]),
+        fig.add_subplot(gs[1, 1]),
+    ]
+
+    for ax, key in zip(axes, top_keys):
+        plot_pair(ax, key)
+    for ax in axes[len(top_keys):]:
+        ax.remove()
+
+    if title:
+        fig.suptitle(title, fontsize=14, fontweight="bold", y=0.98)
+
+    plt.tight_layout()
+    if save_title:
+        save_figure(fig, save_title)
+    plt.show()
+
+
 def plot_model_vs_data_2x3(a_dict, title=None, save_title=None):
     
     import matplotlib.pyplot as plt

@@ -38,7 +38,16 @@ class ModelClass(EconModelClass):
         par.a_bar  = 0.001
         par.zeta   = 6.87835658e+00  
 
-        par.gamma_1 = 2.62100351e-05
+        # Dummy
+        # par.gamma_1 = 2.62100351e-05
+        # par.dummy = 0.0
+
+        par.gamma_1 = 2.52006356e-05 
+        par.dummy = 4.17396380e-02
+
+        par.a_test = 0.0659357705
+        par.b_test = 5.5577111244
+
 
         # Assets
         par.renten= 0.0211947668 
@@ -140,8 +149,7 @@ class ModelClass(EconModelClass):
         par.end_before = par.retirement_age-par.replacement_rate_bf_end
         par.after_retirement = par.retirement_age +par.replacement_rate_af_start
 
-        # Dummy
-        par.dummy = 0.0
+
 
         # State values
         par.unemp = 0
