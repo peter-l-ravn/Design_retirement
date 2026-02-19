@@ -635,6 +635,101 @@ def plot_labor_margins_by_age(intensive_age, extensive_age, total_age, avg_inten
 
     plt.show()
 
+def plot_labor_margins_by_age_multiple(intensive_age, extensive_age, total_age,
+                              avg_intensive, avg_extensive, avg_total,
+                              intensive_age_second, extensive_age_second, total_age_second,
+                              avg_intensive_second, avg_extensive_second, avg_total_second,
+                              age_start, title_prefix="", save_title=None,
+                              ylim_total=(-5, 25), ylim_extensive=(-5, 25), ylim_intensive=(-5, 25)):
+
+    ages = np.arange(age_start, age_start + len(intensive_age))
+    first_age = 56
+
+    mask = (ages >= first_age) & (ages <= 72)
+    ages = ages[mask]
+
+    intensive_age = intensive_age[mask]
+    extensive_age = extensive_age[mask]
+    total_age = total_age[mask]
+
+    intensive_age_second = intensive_age_second[mask]
+    extensive_age_second = extensive_age_second[mask]
+    total_age_second = total_age_second[mask]
+
+    fig, axes = plt.subplots(1, 3, figsize=(18, 8), sharex=True)
+
+    # --- Total Margin ---
+    ax = axes[0]
+    ax.plot(ages, total_age * 100,
+            color=custom_palette[0], linewidth=2.5, label="Total Effect")
+    ax.plot(ages, total_age_second * 100,
+            color='red', linewidth=2.5, linestyle=':',
+            label="Total Effect (Second)")
+    ax.axhline(0, color='black', linestyle='--', linewidth=1)
+    # ax.axhline(avg_total * 100, color='red', linestyle='-', linewidth=1.5,
+    #            label="Average Total Effect")
+    # ax.axhline(avg_total_second * 100, color='red', linestyle=':', linewidth=1.5,
+    #            label="Average Total Effect (Second)")
+    ax.set_xlim(first_age, 72)
+    ax.set_ylim(*ylim_total)
+    ax.set_xticks(np.arange(56, 73, 2))
+    ax.set_title(f"{title_prefix}Total Effect", fontsize=20, fontweight='bold')
+    ax.set_xlabel("Age")
+    ax.set_ylabel("Percentage Points")
+    ax.grid(True, linestyle='--', alpha=0.6)
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+
+    # --- Extensive Margin ---
+    ax = axes[1]
+    ax.plot(ages, extensive_age * 100,
+            color=custom_palette[0], linewidth=2.5, label="Anticipated shock")
+    ax.plot(ages, extensive_age_second * 100,
+            color='red', linewidth=2.5, linestyle=':',
+            label="Unanticipated shock")
+    ax.axhline(0, color='black', linestyle='--', linewidth=1)
+    # ax.axhline(avg_extensive * 100, color='red', linestyle='-', linewidth=1.5,
+    #            label="Average Effect")
+    # ax.axhline(avg_extensive_second * 100, color='red', linestyle=':', linewidth=1.5,
+    #            label="Average Effect (Second)")
+    ax.set_xlim(first_age, 72)
+    ax.set_ylim(*ylim_extensive)
+    ax.set_xticks(np.arange(56, 73, 2))
+    ax.set_title(f"{title_prefix}Extensive Margin", fontsize=20, fontweight="bold")
+    ax.set_xlabel("Age")
+    ax.grid(True, linestyle='--', alpha=0.6)
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+
+    # --- Intensive Margin ---
+    ax = axes[2]
+    ax.plot(ages, intensive_age * 100,
+            color=custom_palette[0], linewidth=2.5, label="Anticipated shock")
+    ax.plot(ages, intensive_age_second * 100,
+            color='red', linewidth=2.5, linestyle=':',
+            label="Unanticipated shock")
+    ax.axhline(0, color='black', linestyle='--', linewidth=1)
+    # ax.axhline(avg_intensive * 100, color='red', linestyle='-', linewidth=1.5,
+    #            label="Average Effect")
+    # ax.axhline(avg_intensive_second * 100, color='red', linestyle=':', linewidth=1.5,
+    #            label="Average Effect (Second)")
+    ax.set_xlim(first_age, 72)
+    ax.set_ylim(*ylim_intensive)
+    ax.set_xticks(np.arange(56, 73, 2))
+    ax.set_title(f"{title_prefix}Intensive Margin", fontsize=20, fontweight="bold")
+    ax.set_xlabel("Age")
+    ax.grid(True, linestyle='--', alpha=0.6)
+    ax.legend(loc='upper right')
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+
+    plt.tight_layout()
+    if save_title:
+        save_figure(fig, save_title)
+
+    plt.show()
+
+
 
 def plot_labor_margin_single(ages_start, margin_age, avg_margin, save_title=None):
     import matplotlib.pyplot as plt

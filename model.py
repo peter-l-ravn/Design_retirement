@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-from functions_njit import main_solver_loop, main_simulation_loop
+from functions_njit import main_solver_loop, main_simulation_loop, main_simulation_loop_unanticipated
 
 from EconModel import EconModelClass, jit
 
@@ -173,6 +173,8 @@ class ModelClass(EconModelClass):
         par.simT = par.T # number of periods
         par.simN = 50000 # number of individuals
 
+        par.rule_change_age = 59 - par.start_age
+
     def update_dependent_parameters(self):
         par = self.par
 
@@ -309,4 +311,17 @@ class ModelClass(EconModelClass):
             sol = model.sol
             sim = model.sim 
             sim.a[:,:], sim.s[:,:], sim.k[:,:], sim.c[:,:], sim.h[:,:], sim.w[:,:], sim.ex[:,:], sim.e[:,:], sim.chi_payment[:,:], sim.tax_rate[:,:], sim.income_before_tax_contrib[:,:], sim.s_retirement[:], sim.retirement_age[:], sim.income[:,:], sim.ret_flag[:,:] = main_simulation_loop(par, sol, sim)
+
+
+    def simulate_unanticipated(self, old_model):
+        self.update_dependent_parameters()        
+        self.allocate_sim()
+
+
+        with jit(self) as model:
+
+            par = model.par
+            sol = model.sol
+            sim = model.sim 
+            sim.a[:,:], sim.s[:,:], sim.k[:,:], sim.c[:,:], sim.h[:,:], sim.w[:,:], sim.ex[:,:], sim.e[:,:], sim.chi_payment[:,:], sim.tax_rate[:,:], sim.income_before_tax_contrib[:,:], sim.s_retirement[:], sim.retirement_age[:], sim.income[:,:], sim.ret_flag[:,:] = main_simulation_loop_unanticipated(par, sol, sim, old_model.sol)
 
