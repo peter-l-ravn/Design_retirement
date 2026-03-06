@@ -177,7 +177,8 @@ def moment_func(sim_data):
     avg_ex_by_age = np.mean(sim_data.ex, axis=0)[:40]  # Length 40
 
     # Concatenate and return
-    return np.concatenate((avg_ex_by_age, avg_a_by_age))
+    # return np.concatenate((avg_ex_by_age, avg_a_by_age))
+    return avg_ex_by_age
 
 
 def simulate_moments(theta, theta_names, model):

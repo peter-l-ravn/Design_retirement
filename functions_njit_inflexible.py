@@ -33,7 +33,10 @@ def bequest(par, a):
 @jit_if_enabled(fastmath=False)
 def wage(par, k, t):
     '''Wage before taxes'''
-    return par.full_time_hours*np.exp(np.log(par.w_0) + par.beta_1*k + par.beta_2*t**2)
+    if t <= 30:
+        return par.full_time_hours*np.exp(np.log(par.w_0) + par.beta_1*k + par.beta_2*t**2)
+    else:
+        return par.full_time_hours*np.exp(np.log(par.w_0) + par.beta_1*k + par.beta_2*30**2)
 
 # 1.1 The four sources of income all before taxes and retirement contributions - and total income before taxes and retirement contributions:
 # 1.1.1 Capital income
@@ -535,7 +538,7 @@ def main_solver_loop(par, sol, do_print = False):
                                         if t >= par.retirement_age:
                                             if efter_idx ==0: #No efterlon
 
-                                                h_star = 1.0
+                                                h_star = 0.8
 
                                                 bc_min, bc_max = budget_constraint(par, h_star, assets, savings, human_capital, employed, retirement_age, efter, t)
                                                 c_star = optimizer(
@@ -565,7 +568,7 @@ def main_solver_loop(par, sol, do_print = False):
                                         else:
 
 
-                                            h_star = 1.0
+                                            h_star = 0.8
 
 
                                             bc_min, bc_max = budget_constraint(par, h_star, assets, savings, human_capital, employed, retirement_age, efter, t)
@@ -645,7 +648,7 @@ def main_solver_loop(par, sol, do_print = False):
 
                                     elif employed == par.emp: # Can choose between employment and unemployment
 
-                                        h_star = 1.0
+                                        h_star = 0.8
 
                                         bc_min, bc_max = budget_constraint(par, h_star, assets, savings, human_capital, employed, retirement_age, efter, t)
                                         c_star = optimizer(
