@@ -93,7 +93,7 @@ class ModelClass(EconModelClass):
         # par.chi_base = 90528 # 7544 * 12
         # par.chi_total = 169704 # (16.273 + 12.011) * 12
         par.chi_base = 10_000
-        par.chi_total = 137_520 #=(7198+462)
+        par.chi_total = 137_520.0 #=(7198+462)
         par.rho = 0.309
         par.rho_ef = 0.64
 
