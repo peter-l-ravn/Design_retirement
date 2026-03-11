@@ -92,8 +92,9 @@ class ModelClass(EconModelClass):
         # Means testing retirement payment
         # par.chi_base = 90528 # 7544 * 12
         # par.chi_total = 169704 # (16.273 + 12.011) * 12
-        par.chi_base = 10_000
-        par.chi_total = 137_520.0 #=(7198+462)
+        par.chi_base = 7.544 * 12
+        par.chi_total = (8729 + 4.467) / 2 * 12
+        par.fradrag = 99200
         par.rho = 0.309
         par.rho_ef = 0.64
 
