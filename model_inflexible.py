@@ -38,8 +38,8 @@ class ModelClass(EconModelClass):
         par.a_bar  = 0.001
         par.zeta   = 6.87835658e+00  
 
-        par.gamma_1 = 2.62100351e-05
-        par.gamma_2 = 1.0
+        par.gamma_1 = 5.04665237e-02
+        par.gamma_2 = 1.14435451e+00
 
         # Assets
         par.renten= 0.0211947668 
@@ -92,8 +92,9 @@ class ModelClass(EconModelClass):
         # Means testing retirement payment
         # par.chi_base = 90528 # 7544 * 12
         # par.chi_total = 169704 # (16.273 + 12.011) * 12
-        par.chi_base = 10_000
-        par.chi_total = 137_520.0 #=(7198+462)
+        par.chi_base = 90528.0
+        par.chi_total = 79176.0 + par.chi_base #=(7198+462)
+        par.fradrag = 150_000.0
         par.rho = 0.309
         par.rho_ef = 0.64
 

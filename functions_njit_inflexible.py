@@ -112,7 +112,7 @@ def public_benefit_fct(par, h, e, ef, income, t):
                 return par.early_benefit[t]
     # public retirement benefits
     else:
-        return max(par.chi_base, par.chi_total - income*par.rho)
+        return max(par.chi_base, par.chi_total - max(0, income - par.fradrag ) * par.rho )
     
 
     
