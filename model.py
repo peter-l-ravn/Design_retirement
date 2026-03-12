@@ -31,15 +31,15 @@ class ModelClass(EconModelClass):
         par.T = 100 - par.start_age # time periods
 
         # Preferences
-        par.beta   = 9.59140783e-01 # 0.995    # Skal kalibreres
-        par.sigma  = 1.15618153e+00     # Skal kalibreres
-        par.gamma  = 2.26711205e+00       # Skal kalibreres
-        par.mu     = 6.85439042e+00    # Skal kalibreres
+        par.beta   = 0.96 # 0.995    # Skal kalibreres
+        par.sigma  = 1.3599504920     # Skal kalibreres
+        par.gamma  = 4.8328134193       # Skal kalibreres
+        par.mu     = 7.1157921694    # Skal kalibreres
         par.a_bar  = 0.001
-        par.zeta   = 6.87835658e+00  
+        par.zeta   =  1.9470458933  
 
-        par.gamma_1 = 2.62100351e-05
-        par.gamma_2 = 1.0
+        par.gamma_1 = 0.0044065569
+        par.gamma_2 = 2.2541311930
 
         # Assets
         par.renten= 0.0211947668 
@@ -92,9 +92,9 @@ class ModelClass(EconModelClass):
         # Means testing retirement payment
         # par.chi_base = 90528 # 7544 * 12
         # par.chi_total = 169704 # (16.273 + 12.011) * 12
-        par.chi_base = 7.544 * 12
-        par.chi_total = (8729 + 4.467) / 2 * 12
-        par.fradrag = 99200
+        par.chi_base = 90528.0
+        par.chi_total = 79176.0 + par.chi_base #=(7198+462)
+        par.fradrag = 150_000.0
         par.rho = 0.309
         par.rho_ef = 0.64
 

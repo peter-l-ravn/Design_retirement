@@ -22,7 +22,8 @@ import math
 @jit_if_enabled(fastmath=False)
 def utility(par, c, h, k, t):
     work_dummy = 1 if (t>=par.retirement_age and h==0) else 0
-    return ((c+1)**(1-par.sigma))/(1-par.sigma) + par.dummy*work_dummy - (par.zeta/(1+k)) * (h**(1+par.gamma))/(1+par.gamma) - par.gamma_1*h*t**2
+    # return ((c+1)**(1-par.sigma))/(1-par.sigma) + par.dummy*work_dummy - (par.zeta/(1+k)) * (h**(1+par.gamma))/(1+par.gamma) - par.gamma_1*h*t**2
+    return ((c+1)**(1-par.sigma))/(1-par.sigma) + par.dummy*work_dummy - (par.zeta/(1+k)) * (h**(1+par.gamma))/(1+par.gamma) - par.gamma_1*h*(np.exp((t - par.retirement_age)/par.gamma_2))/(1 + np.exp((t - par.retirement_age)/par.gamma_2))
 
 
 @jit_if_enabled(fastmath=False)
@@ -32,7 +33,10 @@ def bequest(par, a):
 @jit_if_enabled(fastmath=False)
 def wage(par, k, t):
     '''Wage before taxes'''
-    return par.full_time_hours*np.exp(np.log(par.w_0) + par.beta_1*k + par.beta_2*t**2)
+    if t <= 30:
+        return par.full_time_hours*np.exp(np.log(par.w_0) + par.beta_1*k + par.beta_2*t**2)
+    else:
+        return par.full_time_hours*np.exp(np.log(par.w_0) + par.beta_1*k + par.beta_2*30**2)
 
 # 1.1 The four sources of income all before taxes and retirement contributions - and total income before taxes and retirement contributions:
 # 1.1.1 Capital income
@@ -108,7 +112,8 @@ def public_benefit_fct(par, h, e, ef, income, t):
                 return par.early_benefit[t]
     # public retirement benefits
     else:
-        return max(par.chi_base, par.chi_total - income*par.rho)
+        # return max(par.chi_base, par.chi_total - income*par.rho)
+        return max(par.chi_base, par.chi_total - max(0, income - par.fradrag ) * par.rho )
     
 
     
