@@ -88,6 +88,7 @@ class ModelClass(EconModelClass):
         par.share_lr = 0.55
 
         par.efterloen = 19194 * 12
+        par.efter = 1
 
         # Means testing retirement payment
         # par.chi_base = 90528 # 7544 * 12
@@ -144,8 +145,6 @@ class ModelClass(EconModelClass):
         par.end_before = par.retirement_age-par.replacement_rate_bf_end
         par.after_retirement = par.retirement_age +par.replacement_rate_af_start
 
-        # Dummy
-        par.dummy = 0.0
 
         # State values
         par.unemp = 0
@@ -230,7 +229,7 @@ class ModelClass(EconModelClass):
         par.efter_grid = [0, 1]
 
 
-        shape               = (par.T, par.N_a, par.N_s, par.N_k, par.last_retirement + 1, len(par.e_grid), len(par.efter_grid))
+        shape               = (par.T, par.N_a, par.N_s, par.N_k, par.last_retirement + 1, len(par.e_grid))
         sol.a               = np.full(shape, np.nan)
         sol.ex              = np.full(shape, np.nan)
         sol.c               = np.full(shape, np.nan)
