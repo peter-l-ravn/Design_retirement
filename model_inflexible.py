@@ -169,9 +169,9 @@ class ModelClass(EconModelClass):
         par.c_max  = np.inf
 
         # Shocks
-        par.xi      = 0.02
-        par.N_xi    = 10
-        par.xi_v, par.xi_p = log_normal_gauss_hermite(par.xi, par.N_xi)
+        xi      = 0.02
+        N_xi    = 10
+        par.xi_v, par.xi_p = log_normal_gauss_hermite(xi, N_xi)
 
         # Simulation
         par.simT = par.T # number of periods

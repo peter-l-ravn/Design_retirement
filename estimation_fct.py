@@ -8,62 +8,6 @@ import warnings
 warnings.filterwarnings("ignore", category=RuntimeWarning, message="Mean of empty slice")
  
 
-def prepare_data_old(par):
-    # load data
-    means_data = pd.read_csv("Data/mean_matrix.csv")
-    covariance_matrix = pd.read_csv("Data/variance_matrix.csv")
-
-    # Concate to the final moments
-    assets = np.array(means_data["formue_plsats_Mean"])
-    savings = np.array(means_data["pension_u_skat_plsats_Mean"])
-    hours = np.array(means_data["yearly_hours_Mean"])/par.full_time_hours
-    extensive = np.array(means_data["extensive_v2_Mean"])
-    hours = hours[:40]
-    extensive = extensive[:40]
-
-    mean = np.concatenate([extensive,
-                        assets, 
-                        savings, 
-                        hours])
-    moments = {'extensive':extensive, 'assets':assets, 'savings':savings, 'hours':hours}
-
-    # Alter covariance matrix to create the final weighting matrix
-    numeric_cols = covariance_matrix.select_dtypes(include=[np.number]).columns[1:]
-
-    row_mask = covariance_matrix["_NAME_"].str.startswith("yearly_hours")
-    col_mask = [col for col in covariance_matrix.columns if col.startswith("yearly_hours")]
-
-    covariance_matrix.loc[row_mask, numeric_cols] = covariance_matrix.loc[row_mask, numeric_cols].astype(float)
-
-    covariance_matrix.loc[row_mask, numeric_cols] /= par.full_time_hours
-
-    covariance_matrix[col_mask] /= par.full_time_hours
-
-    # Filter extensive margin to only include first 40 ages
-    ext_rows = covariance_matrix["_NAME_"].str.startswith("extensive_v2")
-    ext_indices = covariance_matrix[ext_rows].index[:40]  # First 40 rows for extensive
-
-    # Keep only the rows and columns corresponding to your full moment vector (175 elements)
-    # Assumes order: assets (70), savings (70), hours (40), extensive (40) → total = 220
-    # So we filter the covariance matrix to be 220×220 in same order
-    total_keep = 70 + 70 + 40 + 40  # = 220
-
-    # Now get only the top-left 220×220 block
-    cov_matrix_numeric = covariance_matrix[numeric_cols].to_numpy()
-    cov_matrix_numeric = cov_matrix_numeric[:total_keep, :total_keep]
-
-    # Identify good (non-NaN) moments
-    valid = ~np.isnan(np.diag(cov_matrix_numeric))
-
-    # Keep only valid rows and columns
-    cov_matrix_numeric = cov_matrix_numeric[valid][:, valid]
-    mean = mean[valid]
-
-    # Final weighting matrix
-    weights = np.linalg.pinv(cov_matrix_numeric)
-
-    return mean, weights, moments
-
 def prepare_data(par, year="all"):
     # Load data
 
@@ -186,12 +130,31 @@ def simulate_moments(theta, theta_names, model):
     for i, name in enumerate(theta_names):
         setattr(model.par, name, theta[i])
     
-    # 2. Solve and simulate the model
-    model.solve()
-    model.simulate()
+    efterloen_options = [1, 0]
+    flexible_hours_options = ["NVFI", "Fixed"]
+
+    sim_means = []
+
+    for efterloen in efterloen_options:
+        for flexible_hours in flexible_hours_options:
+
+            model.par.efter = efterloen
+            model.par.flexible_hours = flexible_hours
+
+            model.solve()
+            model.simulate()
+
+            sim_mean = [
+                np.nanmean(np.where(model.sim.ex == 1, model.sim.h, np.nan), axis=0)[:45],
+                np.mean(model.sim.ex, axis=0)[:45],
+                np.mean(model.sim.a, axis=0),
+                np.clip(np.mean(model.sim.s, axis=0), 0, None)
+            ]
+
+            sim_means.append(sim_mean)
     
     # 3. Return the expanded vector of simulated moments
-    return moment_func(model.sim)
+    return sim_means
 
 def obj_func(scaled_theta, theta_names, mom_data, W, model, bounds, do_print=False):
     start_time = time.time()  # Start timing
@@ -203,18 +166,47 @@ def obj_func(scaled_theta, theta_names, mom_data, W, model, bounds, do_print=Fal
         for i, name in enumerate(theta_names):
             print_str += f'{theta[i]:2.10f}, '
         print(print_str)
-    
-    # Compute simulated moments
-    mom_sim = simulate_moments(theta, theta_names, model)
 
-    # Sum of squared errors over all 175 elements
-    obj = (mom_data - mom_sim).T @ W @ (mom_data - mom_sim)
+
+    sim_means = simulate_moments(theta, theta_names, model)
+
+    def loss_fn(params):
+
+        hours_mean, extensive_mean, liquid_mean, _ = calc_means(sim_means, params)
+
+        mom_sim = np.concatenate([extensive_mean[:40], liquid_mean, hours_mean[:40]])
+
+        return (mom_data - mom_sim).T @ W @ (mom_data - mom_sim)
+    
+
+    def calc_means(sim_means, params):
+        efterloen_share = params[0]
+        flexible_share = params[1]
+
+        p11 = efterloen_share * flexible_share
+        p10 = efterloen_share * (1 - flexible_share)
+        p01 = (1 - efterloen_share) * flexible_share
+        p00 = (1 - efterloen_share) * (1 - flexible_share)
+
+        hours_mean              = p11*sim_means[0][0] + p10*sim_means[1][0] + p01*sim_means[2][0] + p00*sim_means[3][0]
+        extensive_mean          = p11*sim_means[0][1] + p10*sim_means[1][1] + p01*sim_means[2][1] + p00*sim_means[3][1]
+        liquid_mean             = p11*sim_means[0][2] + p10*sim_means[1][2] + p01*sim_means[2][2] + p00*sim_means[3][2]
+        illiquid_mean           = p11*sim_means[0][3] + p10*sim_means[1][3] + p01*sim_means[2][3] + p00*sim_means[3][3]
+
+        return hours_mean, extensive_mean, liquid_mean, illiquid_mean
+
+    x0 = np.array([0.5, 0.5])
+    bounds = [(0.0, 1.0), (0.0, 1.0)]
+
+    res = minimize(loss_fn, x0, method='L-BFGS-B', bounds=bounds,
+                options={'ftol':1e-12, 'gtol':1e-8, 'maxiter':200})
+
 
     end_time = time.time()  # End timing
     elapsed_time = end_time - start_time
     
     if do_print: 
-        print(f"Error = {obj:.5f}, Time = {elapsed_time:.1f} seconds")
+        print(f"Error = {res.fun:.5f}, x = {res.x}, Time = {elapsed_time:.1f} seconds")
 
-    return obj
+    return res.fun
 

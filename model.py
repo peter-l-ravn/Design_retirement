@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-from functions_njit import main_solver_loop, main_simulation_loop, main_simulation_loop_unanticipated
+from functions_njit_NVFI import main_solver_loop, main_simulation_loop
 
 from EconModel import EconModelClass, jit
 
@@ -24,7 +24,6 @@ class ModelClass(EconModelClass):
 
         # Optimization settings
         par.opt_tol = 1e-6
-        par.opt_maxiter = 1000
 
         # Time
         par.start_age = 30  # Time when agents enter the workforce
@@ -51,8 +50,6 @@ class ModelClass(EconModelClass):
         # par.r_s    = 0.016058 # np.mean(np.array(pd.read_csv("Data/mean_matrix.csv")['rente_pension_sum'])[:60])
         
         # wage and human capital
-        par.upsilon = 0.0
-
         par.w_0 =       136.083656
         par.k_0 =        11.140278
         par.beta_1 =         0.0500726898
@@ -62,7 +59,6 @@ class ModelClass(EconModelClass):
 
         par.full_time_hours = 1924.0
 
-        par.k_scale = 1.
         # Tax system
         par.labor_market_rate            = 0.08           # "am_sats"
         par.employment_deduction_rate    = 0.095          # "beskfradrag_sats"
@@ -75,7 +71,7 @@ class ModelClass(EconModelClass):
 
         # Retirement system 
         par.retirement_age      = 65 - par.start_age # Time when agents enter pension
-        par.range               = 5
+        # par.range               = 5
         par.first_retirement    = 30
         par.last_retirement     = 45
 
@@ -89,6 +85,9 @@ class ModelClass(EconModelClass):
 
         par.efterloen = 19194 * 12
         par.efter = 1
+
+        par.flexible_hours = "NVFI"
+        par.hours_mean = 0.8
 
         # Means testing retirement payment
         # par.chi_base = 90528 # 7544 * 12
@@ -104,7 +103,6 @@ class ModelClass(EconModelClass):
         par.p_e_0 = np.array(df_ekso['to_0'])
         par.p_e_1 = np.array(df_ekso['to_1'])
         par.p_e_2 = np.array(df_ekso['to_2'])
-        par.p_efter = 0.6
         par.transition_length = par.T
 
         # par.initial_ex = pd.read_csv('data/mean_matrix.csv')['extensive_v2_Mean'][0]
@@ -152,10 +150,10 @@ class ModelClass(EconModelClass):
         par.ret = 2
 
         # Grids
-        par.N_a, par.a_sp, par.a_min, par.a_max = 10, 1.5, 0.1, 10_255_346
-        par.N_s, par.s_sp, par.s_min, par.s_max = 10, 1.5, 0.0, 6_884_777
+        par.N_a, par.a_sp, par.a_min, par.a_max = 20, 1.5, 0.1, 10_255_346
+        par.N_s, par.s_sp, par.s_min, par.s_max = 20, 1.5, 0.0, 6_884_777
 
-        par.N_k, par.k_sp, par.k_min = 15, 1.5, 0
+        par.N_k, par.k_sp, par.k_min = 30, 1.5, 0
         par.w_max = 1_564_195      
         # par.k_max = (np.log(1_564_195 / par.full_time_hours) - par.beta_2 * np.arange(par.T)**2) / par.beta_1
         par.k_max = np.arange(par.T) + 40        
@@ -185,7 +183,6 @@ class ModelClass(EconModelClass):
         par.T = 100 - par.start_age # time periods
 
         # # Retirement system
-        # par.first_retirement = par.retirement_age - par.range
         par.last_retirement = 55
 
         # benefits
@@ -228,16 +225,21 @@ class ModelClass(EconModelClass):
         par.e_grid = [0, 1, 2]
         par.efter_grid = [0, 1]
 
+        par.a_m_grid = np.empty((par.T, par.N_a, par.last_retirement+1, len(par.e_grid)))
+        par.s_m_grid = np.empty((par.T, par.N_s, par.last_retirement+1, len(par.e_grid)))
+        par.k_m_grid = np.empty((par.T, par.N_k, par.last_retirement+1, len(par.e_grid)))
+
 
         shape               = (par.T, par.N_a, par.N_s, par.N_k, par.last_retirement + 1, len(par.e_grid))
-        sol.a               = np.full(shape, np.nan)
-        sol.ex              = np.full(shape, np.nan)
+        # sol.a               = np.full(shape, np.nan)
+        # sol.ex              = np.full(shape, np.nan)
         sol.c               = np.full(shape, np.nan)
-        sol.c_un            = np.full(shape, np.nan)
+        # sol.c_un            = np.full(shape, np.nan)
         sol.h               = np.full(shape, np.nan)
         sol.V               = np.full(shape, np.nan)
-        sol.V_employed      = np.full(shape, np.nan)
-        sol.V_unemployed    = np.full(shape, np.nan)
+        sol.c_given_m       = np.full(shape, np.nan)
+        # sol.V_employed      = np.full(shape, np.nan)
+        # sol.V_unemployed    = np.full(shape, np.nan)
 
         self.allocate_sim()
 
@@ -270,7 +272,6 @@ class ModelClass(EconModelClass):
         sim.xi          = np.random.choice(par.xi_v, size=(par.simN, par.simT), p=par.xi_p)
 
         sim.e_state_exogenous = Categorical(p=[par.p_e_0, par.p_e_1, par.p_e_2], size =(par.simN, par.transition_length)).rvs()
-        sim.efter_init = Bernoulli(p = par.p_efter, size =(par.simN)).rvs()
 
         # sim.from_employed   = Categorical(p=[par.p_e_0, par.p_e_1, par.p_e_2], size =(par.simN, par.transition_length)).rvs()
         # sim.from_unemployed = Categorical(p=[par.p_e_0, par.p_e_1, par.p_e_2], size =(par.simN, par.transition_length)).rvs()
@@ -302,7 +303,8 @@ class ModelClass(EconModelClass):
             par = model.par
             sol = model.sol
 
-            sol.c[:, :, :, :, :, :, :], sol.h[:, :, :, :, :, :, :], sol.ex[:, :, :, :, :, :, :], sol.V[:, :, :, :, :, :, :], sol.a[:, :, :, :, :, :, :] = main_solver_loop(par, sol, do_print)
+            # sol.c[:, :, :, :, :, :], sol.h[:, :, :, :, :, :], sol.ex[:, :, :, :, :, :], sol.V[:, :, :, :, :, :], sol.a[:, :, :, :, :, :] = main_solver_loop(par, sol, do_print)
+            sol.c[:, :, :, :, :, :], sol.h[:, :, :, :, :, :], sol.V[:, :, :, :, :, :] = main_solver_loop(par, sol, do_print)
 
     def simulate(self):
         self.update_dependent_parameters()        
@@ -316,15 +318,15 @@ class ModelClass(EconModelClass):
             sim.a[:,:], sim.s[:,:], sim.k[:,:], sim.c[:,:], sim.h[:,:], sim.w[:,:], sim.ex[:,:], sim.e[:,:], sim.chi_payment[:,:], sim.tax_rate[:,:], sim.income_before_tax_contrib[:,:], sim.s_retirement[:], sim.retirement_age[:], sim.income[:,:], sim.ret_flag[:,:] = main_simulation_loop(par, sol, sim)
 
 
-    def simulate_unanticipated(self, old_model):
-        self.update_dependent_parameters()        
-        self.allocate_sim()
+    # def simulate_unanticipated(self, old_model):
+    #     self.update_dependent_parameters()        
+    #     self.allocate_sim()
 
 
-        with jit(self) as model:
+    #     with jit(self) as model:
 
-            par = model.par
-            sol = model.sol
-            sim = model.sim 
-            sim.a[:,:], sim.s[:,:], sim.k[:,:], sim.c[:,:], sim.h[:,:], sim.w[:,:], sim.ex[:,:], sim.e[:,:], sim.chi_payment[:,:], sim.tax_rate[:,:], sim.income_before_tax_contrib[:,:], sim.s_retirement[:], sim.retirement_age[:], sim.income[:,:], sim.ret_flag[:,:] = main_simulation_loop_unanticipated(par, sol, sim, old_model.sol)
+    #         par = model.par
+    #         sol = model.sol
+    #         sim = model.sim 
+    #         sim.a[:,:], sim.s[:,:], sim.k[:,:], sim.c[:,:], sim.h[:,:], sim.w[:,:], sim.ex[:,:], sim.e[:,:], sim.chi_payment[:,:], sim.tax_rate[:,:], sim.income_before_tax_contrib[:,:], sim.s_retirement[:], sim.retirement_age[:], sim.income[:,:], sim.ret_flag[:,:] = main_simulation_loop_unanticipated(par, sol, sim, old_model.sol)
 
