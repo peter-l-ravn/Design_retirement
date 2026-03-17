@@ -23,7 +23,7 @@ class ModelClass(EconModelClass):
         par = self.par
 
         # Optimization settings
-        par.opt_tol = 1e-6
+        par.opt_tol = 1e-4
 
         # Time
         par.start_age = 30  # Time when agents enter the workforce

@@ -145,7 +145,7 @@ def simulate_moments(theta, theta_names, model):
             model.simulate()
 
             sim_mean = [
-                np.nanmean(np.where(model.sim.ex == 1, model.sim.h, np.nan), axis=0)[:45],
+                np.nan_to_num(np.nanmean(np.where(model.sim.ex == 1, model.sim.h, np.nan), axis=0)[:45], nan=0.0),
                 np.mean(model.sim.ex, axis=0)[:45],
                 np.mean(model.sim.a, axis=0),
                 np.clip(np.mean(model.sim.s, axis=0), 0, None)
