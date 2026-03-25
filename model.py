@@ -50,12 +50,19 @@ class ModelClass(EconModelClass):
         # par.r_s    = 0.016058 # np.mean(np.array(pd.read_csv("Data/mean_matrix.csv")['rente_pension_sum'])[:60])
         
         # wage and human capital
-        par.w_0 =       136.083656
-        par.k_0 =        11.140278
-        par.beta_1 =         0.0500726898
-        par.beta_2 =        -0.000456
-        par.delta =         0.027943
-        par.k_0_var =         0.049583
+        # par.w_0 =       136.083656
+        # par.k_0 =        11.140278
+        # par.beta_1 =         0.0500726898
+        # par.beta_2 =        -0.000456
+        # par.delta =         0.027943
+        # par.k_0_var =         0.049583
+
+
+        par.w_0 =    136.83
+        par.k_0 =        11.588177
+        par.beta_1 =         0.024787
+        par.beta_2 =        -0.000042
+        par.delta =         0.030000
 
         par.full_time_hours = 1924.0
 
@@ -150,8 +157,8 @@ class ModelClass(EconModelClass):
         par.ret = 2
 
         # Grids
-        par.N_a, par.a_sp, par.a_min, par.a_max = 20, 1.5, 0.1, 10_255_346
-        par.N_s, par.s_sp, par.s_min, par.s_max = 20, 1.5, 0.0, 6_884_777
+        par.N_a, par.a_sp, par.a_min, par.a_max = 30, 1.5, 0.1, 10_255_346
+        par.N_s, par.s_sp, par.s_min, par.s_max = 30, 1.5, 0.0, 6_884_777
 
         par.N_k, par.k_sp, par.k_min = 30, 1.5, 0
         par.w_max = 1_564_195      

@@ -174,7 +174,7 @@ def obj_func(scaled_theta, theta_names, mom_data, W, model, bounds, do_print=Fal
 
         hours_mean, extensive_mean, liquid_mean, _ = calc_means(sim_means, params)
 
-        mom_sim = np.concatenate([extensive_mean[:40], liquid_mean, hours_mean[:40]])
+        mom_sim = np.concatenate([extensive_mean[9:45], liquid_mean[4:45], hours_mean[27:40]])
 
         return (mom_data - mom_sim).T @ W @ (mom_data - mom_sim)
     
