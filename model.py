@@ -82,7 +82,7 @@ class ModelClass(EconModelClass):
         par.first_retirement    = 30
         par.last_retirement     = 45
 
-        par.early_benefits_lag = 1
+        par.early_benefits_lag = 0
 
         par.m = 12.0 # Years with retirement payments
 
@@ -157,8 +157,8 @@ class ModelClass(EconModelClass):
         par.ret = 2
 
         # Grids
-        par.N_a, par.a_sp, par.a_min, par.a_max = 30, 1.5, 0.1, 10_255_346
-        par.N_s, par.s_sp, par.s_min, par.s_max = 30, 1.5, 0.0, 6_884_777
+        par.N_a, par.a_sp, par.a_min, par.a_max = 20, 1.5, 0.1, 10_255_346
+        par.N_s, par.s_sp, par.s_min, par.s_max = 20, 1.5, 0.0, 6_884_777
 
         par.N_k, par.k_sp, par.k_min = 30, 1.5, 0
         par.w_max = 1_564_195      
