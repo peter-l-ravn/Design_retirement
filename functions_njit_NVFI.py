@@ -175,7 +175,7 @@ def tax_rate_fct(par, a, s, k, h, e, r, ef, t):
 @jit_if_enabled(fastmath=False)
 def retirement_contribution_fct(par, a, s, k, h, r, t):
     '''Retirement contributions'''
-    return labor_income_fct(par, k, h, r, t)*par.tau[t]
+    return labor_income_fct(par, k, h, r, t)*(par.tau_private[t] + par.tau_employer[t])
 
 
 # 1.3. calculate income after taxes and contributions
@@ -200,7 +200,7 @@ def final_income_and_retirement_contri(par, a, s, k, h, e, r, ef, t):
     retirement_contribution = retirement_contribution_fct(par, a, s, k, h, r, t)
 
     if h > 0.0:
-        return (1-tax_rate)*(income_private*(1-par.tau[t]) + chi), retirement_contribution
+        return (1-tax_rate)*(income_private*(1-par.tau_private[t]) + chi), retirement_contribution
     else:
         return (1-tax_rate)*(income_private + chi), retirement_contribution
 

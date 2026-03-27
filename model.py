@@ -86,7 +86,9 @@ class ModelClass(EconModelClass):
 
         par.m = 12.0 # Years with retirement payments
 
-        par.tau = np.array(pd.read_csv("Smooth_data/smooth_indbet.csv")['indbetalingsprocent_sum'])
+        # par.tau = np.array(pd.read_csv("Smooth_data/smooth_indbet.csv")['indbetalingsprocent_sum'])
+        par.tau_private = pd.read_csv("Smooth_data/smooth_indbet_private.csv").squeeze("columns").to_numpy()
+        par.tau_employer = pd.read_csv("Smooth_data/smooth_indbet_employer.csv").squeeze("columns").to_numpy()
 
         par.share_lr = 0.55
 
@@ -157,8 +159,8 @@ class ModelClass(EconModelClass):
         par.ret = 2
 
         # Grids
-        par.N_a, par.a_sp, par.a_min, par.a_max = 20, 1.5, 0.1, 10_255_346
-        par.N_s, par.s_sp, par.s_min, par.s_max = 20, 1.5, 0.0, 6_884_777
+        par.N_a, par.a_sp, par.a_min, par.a_max = 30, 1.5, 0.1, 10_255_346
+        par.N_s, par.s_sp, par.s_min, par.s_max = 30, 1.5, 0.0, 6_884_777
 
         par.N_k, par.k_sp, par.k_min = 30, 1.5, 0
         par.w_max = 1_564_195      
