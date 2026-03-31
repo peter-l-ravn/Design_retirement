@@ -69,6 +69,91 @@ def optimizer(obj,a,b,args=(),tol=1e-6):
         return (c+b)/2
     
 @jit_if_enabled()
+def optimizer_with_start(obj,guess,a,b,speed,args=()):
+    """ golden section search optimizer
+    
+    Args:
+
+        obj (callable): 1d function to optimize over
+        a (double): minimum of starting bracket
+        b (double): maximum of starting bracke
+        args (tuple): additional arguments to the objective function
+        tol (double,optional): tolerance
+
+    Returns:
+
+        (float): optimization result
+    
+    """
+
+    if speed == "FAST":
+        if guess == 0.0:
+            tol = ((b - a) / 2.0) * 1e-6
+        else:
+            tol = 1e-6 * guess
+
+        lower_guess = guess * 0.95
+        upper_guess = guess * 1.05
+
+        if lower_guess < a or upper_guess > b:
+            pass
+        else:
+            guess_val = obj(guess,*args)
+            lower_guess_val = obj(lower_guess,*args)
+            upper_guess_val = obj(upper_guess,*args)
+
+            if guess_val < lower_guess_val and guess_val < upper_guess_val:
+                a = upper_guess
+                b = lower_guess
+            elif guess_val < lower_guess_val and guess_val > upper_guess_val:
+                a = guess
+            else:
+                b = guess
+    else:
+        tol = 1e-4
+        
+
+    inv_phi = (np.sqrt(5) - 1) / 2 # 1/phi                                                                                                                
+    inv_phi_sq = (3 - np.sqrt(5)) / 2 # 1/phi^2     
+        
+    # a. distance
+    dist = b - a
+    if dist <= tol: 
+        return (a+b)/2
+
+    # b. number of iterations
+    n = int(np.ceil(np.log(tol/dist)/np.log(inv_phi)))
+
+    # c. potential new mid-points
+    c = a + inv_phi_sq * dist
+    d = a + inv_phi * dist
+    yc = obj(c,*args)
+    yd = obj(d,*args)
+
+    # d. loop
+    for _ in range(n-1):
+        if yc < yd:
+            b = d
+            d = c
+            yd = yc
+            dist = inv_phi*dist
+            c = a + inv_phi_sq * dist
+            yc = obj(c,*args)
+        else:
+            a = c
+            c = d
+            yc = yd
+            dist = inv_phi*dist
+            d = a + inv_phi * dist
+            yd = obj(d,*args)
+
+    # e. return
+    if yc < yd:
+        return (a+d)/2
+    else:
+        return (c+b)/2
+    
+@jit_if_enabled()
 def optimize_outer(obj,a,b,args=(),tol=1e-6):
     """ golden section search optimizer
     

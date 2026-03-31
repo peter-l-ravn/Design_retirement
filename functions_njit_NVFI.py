@@ -2,7 +2,7 @@ from numba import njit, prange
 import numpy as np 
 
 from consav.linear_interp import interp_1d, interp_2d, interp_3d, interp_4d
-from optimizers import optimizer, optimize_outer, interp_3d_vec
+from optimizers import optimizer, optimize_outer, interp_3d_vec, optimizer_with_start
 from jit_module import jit_if_enabled
 
 import math
@@ -259,9 +259,12 @@ def precompute_EV_next(par, sol_V, retirement_idx, employed, t):
     p2 = par.p_e_2[t]
 
     # pre-sliced continuation values at retirement_idx+1
-    V_next_ret = sol_V[t+1, :, :, :, retirement_idx+1, par.ret]
-    V_next_emp = sol_V[t+1, :, :, :, retirement_idx+1, par.emp]
-    V_next_unemp = sol_V[t+1, :, :, :, retirement_idx+1, par.unemp]
+    if t != par.last_retirement:
+        V_next_ret = sol_V[t+1, :, :, :, retirement_idx+1, par.ret]
+        V_next_emp = sol_V[t+1, :, :, :, retirement_idx+1, par.emp]
+        V_next_unemp = sol_V[t+1, :, :, :, retirement_idx+1, par.unemp]
+    else:
+        pass
 
     # only used in the last-retirement case
     V_next_ret_same = sol_V[t+1, :, :, :, retirement_idx, par.ret]
@@ -495,6 +498,12 @@ def obj_hours(h, par, sol_V, sol_EV, a, s, k, e, r, ef, t, dist):
     
     return val_at_c_star
 
+@jit_if_enabled(fastmath=False)
+def optimizer_guess(guess, min, max):
+    if np.isnan(guess):
+        return (min + max) / 2
+    else:
+        return guess
 
 # 5. Solving the model
 @jit_if_enabled(parallel=True)
@@ -563,11 +572,14 @@ def main_solver_loop(par, sol, do_print = False):
                                 k_m = par.k_m_grid[t, k_idx, retirement_age_idx, employed]
 
                                 idx = (t, a_idx, s_idx, k_idx, retirement_age_idx, employed)
+                                idx_next = (t+1, a_idx, s_idx, k_idx, retirement_age_idx, employed)
                                 
-                                sol_c_given_m[idx] = optimizer(
+                                sol_c_given_m[idx] = optimizer_with_start(
                                     obj_consumption_given_m,
+                                    optimizer_guess(sol_c_given_m[idx_next], par.c_min, a_m),
                                     par.c_min,
                                     a_m,
+                                    par.speed,
                                     args=(par, sol_EV, a_m, s_m, k_m, t)
                                 ) 
                             else:
@@ -585,6 +597,7 @@ def main_solver_loop(par, sol, do_print = False):
                     human_capital = par.k_grid[t][k_idx]
 
                     idx = (t, a_idx, s_idx, k_idx, retirement_age_idx, employed)
+                    idx_next = (t+1, a_idx, s_idx, k_idx, retirement_age_idx, employed)
                     idx_ret = (t, a_idx, s_idx, slice(None), retirement_age_idx, employed)
 
                     if t == par.T - 1: # Last period
@@ -609,12 +622,13 @@ def main_solver_loop(par, sol, do_print = False):
 
                                 bc_min, bc_max = budget_constraint(par, hours_unemp, assets, savings, human_capital_unemp, employed, retirement_age, efter, income, t)
 
-                                c_star = optimizer(
+                                c_star = optimizer_with_start(
                                     obj_consumption_after_retirement,
+                                    optimizer_guess(sol_c[idx_next], bc_min, bc_max), 
                                     bc_min,
                                     bc_max,
-                                    args=(par, sol_V, assets, savings, employed, retirement_age, efter, income, t),
-                                    tol=par.opt_tol
+                                    par.speed,
+                                    args=(par, sol_V, assets, savings, employed, retirement_age, efter, income, t)
                                 )
 
                                 sol_c[idx_ret] = c_star
@@ -633,12 +647,13 @@ def main_solver_loop(par, sol, do_print = False):
 
                                 bc_min, bc_max = budget_constraint(par, hours_unemp, assets, savings, human_capital_unemp, employed, retirement_age, efter, income, t)
 
-                                c_star = optimizer(
+                                c_star = optimizer_with_start(
                                     obj_consumption_after_retirement,
+                                    optimizer_guess(sol_c[idx_next], bc_min, bc_max),
                                     bc_min,
                                     bc_max,
-                                    args=(par, sol_V, assets, savings, employed, retirement_age, efter, income, t),
-                                    tol=par.opt_tol
+                                    par.speed,
+                                    args=(par, sol_V, assets, savings, employed, retirement_age, efter, income, t)
                                 )
 
                                 sol_c[idx_ret] = c_star
@@ -658,12 +673,13 @@ def main_solver_loop(par, sol, do_print = False):
 
                             bc_min, bc_max = budget_constraint(par, hours_unemp, assets, savings, human_capital, employed, retirement_age, efter, income, t)
 
-                            c_star_u = optimizer(
+                            c_star_u = optimizer_with_start(
                                 obj_consumption_after_retirement,
+                                optimizer_guess(sol_c[idx_next], bc_min, bc_max),
                                 bc_min,
                                 bc_max,
-                                args=(par, sol_V, assets, savings, employed, retirement_age, efter, income, t),
-                                tol=par.opt_tol
+                                par.speed,
+                                args=(par, sol_V, assets, savings, employed, retirement_age, efter, income, t)
                             )
 
                             sol_V[idx] = value_function_after_retirement(par, sol_V, c_star_u, assets, savings, employed, retirement_age, efter, income, t)
@@ -683,14 +699,15 @@ def main_solver_loop(par, sol, do_print = False):
                                         obj_hours,       
                                         par.h_min,
                                         par.h_max,
-                                        args=(par, sol_V, sol_EV, assets, savings, human_capital, employed, retirement_age, efter, t),
-                                        tol=par.opt_tol
+                                        args=(par, sol_V, sol_EV, assets, savings, human_capital, employed, retirement_age, efter, t)
                                     )
                                 elif par.flexible_hours == "NVFI":
-                                    h_star = optimizer(
+                                    h_star = optimizer_with_start(
                                         obj_hours_NVFI,
+                                        optimizer_guess(sol_h[idx_next], par.h_min, par.h_max),
                                         par.h_min,
                                         par.h_max,
+                                        par.speed,
                                         args=(par, sol_c_given_m, sol_EV, assets, savings, human_capital, employed, retirement_age, efter, t)
                                     )
                                 else:
@@ -700,12 +717,13 @@ def main_solver_loop(par, sol, do_print = False):
 
                                 bc_min, bc_max = budget_constraint(par, h_star, assets, savings, human_capital, employed, retirement_age, efter, income, t)
 
-                                c_star = optimizer(
+                                c_star = optimizer_with_start(
                                     obj_consumption,
+                                    optimizer_guess(sol_c[idx_next], bc_min, bc_max),
                                     bc_min,
                                     bc_max,
-                                    args=(par, sol_V, sol_EV, h_star, assets, savings, human_capital, employed, retirement_age, efter, income, retirement_contribution, t),
-                                    tol=par.opt_tol
+                                    par.speed,
+                                    args=(par, sol_V, sol_EV, h_star, assets, savings, human_capital, employed, retirement_age, efter, income, retirement_contribution, t)
                                 )
 
                                 val = value_function(par, sol_V, sol_EV, c_star, h_star, assets, savings, human_capital, employed, retirement_age, efter, income, retirement_contribution, t)
@@ -738,14 +756,15 @@ def main_solver_loop(par, sol, do_print = False):
                                         obj_hours,       
                                         par.h_min,
                                         par.h_max,
-                                        args=(par, sol_V, sol_EV, assets, savings, human_capital, employed, retirement_age, efter, t),
-                                        tol=par.opt_tol
+                                        args=(par, sol_V, sol_EV, assets, savings, human_capital, employed, retirement_age, efter, t)
                                     )
                                 elif par.flexible_hours == "NVFI":
-                                    h_star = optimizer(
+                                    h_star = optimizer_with_start(
                                         obj_hours_NVFI,
+                                        optimizer_guess(sol_h[idx_next], par.h_min, par.h_max),
                                         par.h_min,
                                         par.h_max,
+                                        par.speed,
                                         args=(par, sol_c_given_m, sol_EV, assets, savings, human_capital, employed, retirement_age, efter, t)
                                     )
                                 else:
@@ -755,12 +774,13 @@ def main_solver_loop(par, sol, do_print = False):
 
                                 bc_min, bc_max = budget_constraint(par, h_star, assets, savings, human_capital, employed, retirement_age, efter, income, t)
 
-                                c_star = optimizer(
+                                c_star = optimizer_with_start(
                                     obj_consumption,
+                                    optimizer_guess(sol_c[idx_next], bc_min, bc_max),
                                     bc_min,
                                     bc_max,
-                                    args=(par, sol_V, sol_EV, h_star, assets, savings, human_capital, employed, retirement_age, efter, income, retirement_contribution, t),
-                                    tol=par.opt_tol
+                                    par.speed,
+                                    args=(par, sol_V, sol_EV, h_star, assets, savings, human_capital, employed, retirement_age, efter, income, retirement_contribution, t)
                                 )
 
                                 val = value_function(par, sol_V, sol_EV, c_star, h_star, assets, savings, human_capital, employed, retirement_age, efter, income, retirement_contribution, t)
@@ -786,12 +806,13 @@ def main_solver_loop(par, sol, do_print = False):
 
                                 bc_min, bc_max = budget_constraint(par, hours_unemp, assets, savings, human_capital_unemp, employed, retirement_age, efter, income, t)
 
-                                c_star_u = optimizer(
+                                c_star_u = optimizer_with_start(
                                     obj_consumption_after_retirement,
+                                    optimizer_guess(sol_c[idx_next], bc_min, bc_max),
                                     bc_min,
                                     bc_max,
-                                    args=(par, sol_V, assets, savings, employed, retirement_age, efter, income, t),
-                                    tol=par.opt_tol
+                                    par.speed,
+                                    args=(par, sol_V, assets, savings, employed, retirement_age, efter, income, t)
                                 )
 
                                 sol_V[idx_ret] = value_function_after_retirement(par, sol_V, c_star_u, assets, savings, employed, retirement_age, efter, income, t)
@@ -811,12 +832,13 @@ def main_solver_loop(par, sol, do_print = False):
 
                             bc_min, bc_max = budget_constraint(par, hours_unemp, assets, savings, human_capital, employed, retirement_age, efter, income, t)
                             
-                            c_star_u = optimizer(
+                            c_star_u = optimizer_with_start(
                                 obj_consumption,
+                                optimizer_guess(sol_c[idx_next], bc_min, bc_max),
                                 bc_min,
                                 bc_max,
-                                args=(par, sol_V, sol_EV, hours_unemp, assets, savings, human_capital, employed, retirement_age, efter, income, retirement_contribution, t),
-                                tol=par.opt_tol
+                                par.speed,
+                                args=(par, sol_V, sol_EV, hours_unemp, assets, savings, human_capital, employed, retirement_age, efter, income, retirement_contribution, t)
                             )
 
                             sol_V[idx] = value_function(par, sol_V, sol_EV, c_star_u, hours_unemp, assets, savings, human_capital, employed, retirement_age, efter, income, retirement_contribution, t) 
@@ -842,14 +864,15 @@ def main_solver_loop(par, sol, do_print = False):
                                     obj_hours,       
                                     par.h_min,
                                     par.h_max,
-                                    args=(par, sol_V, sol_EV, assets, savings, human_capital, employed, retirement_age, efter, t),
-                                    tol=par.opt_tol
+                                    args=(par, sol_V, sol_EV, assets, savings, human_capital, employed, retirement_age, efter, t)
                                 )
                             elif par.flexible_hours == "NVFI":
-                                h_star = optimizer(
+                                h_star = optimizer_with_start(
                                     obj_hours_NVFI,
+                                    optimizer_guess(sol_h[idx_next], par.h_min, par.h_max),
                                     par.h_min,
                                     par.h_max,
+                                    par.speed,
                                     args=(par, sol_c_given_m, sol_EV, assets, savings, human_capital, employed, retirement_age, efter, t)
                                 )
                             else:
@@ -859,12 +882,13 @@ def main_solver_loop(par, sol, do_print = False):
 
                             bc_min, bc_max = budget_constraint(par, h_star, assets, savings, human_capital, employed, retirement_age, efter, income, t)
 
-                            c_star = optimizer(
+                            c_star = optimizer_with_start(
                                 obj_consumption,
+                                optimizer_guess(sol_c[idx_next], bc_min, bc_max),
                                 bc_min,
                                 bc_max,
-                                args=(par, sol_V, sol_EV, h_star, assets, savings, human_capital, employed, retirement_age, efter, income, retirement_contribution, t),
-                                tol=par.opt_tol
+                                par.speed,
+                                args=(par, sol_V, sol_EV, h_star, assets, savings, human_capital, employed, retirement_age, efter, income, retirement_contribution, t)
                             )
 
                             val = value_function(par, sol_V, sol_EV, c_star, h_star, assets, savings, human_capital, employed, retirement_age, efter, income, retirement_contribution, t)
@@ -889,12 +913,13 @@ def main_solver_loop(par, sol, do_print = False):
 
                             bc_min, bc_max = budget_constraint(par, hours_unemp, assets, savings, human_capital_unemp, employed, retirement_age, efter, income, t)
 
-                            c_star_u = optimizer(
+                            c_star_u = optimizer_with_start(
                                 obj_consumption_after_retirement,
+                                optimizer_guess(sol_c[idx_next], bc_min, bc_max),
                                 bc_min,
                                 bc_max,
-                                args=(par, sol_V, assets, savings, employed, retirement_age, efter, income, t),
-                                tol=par.opt_tol
+                                par.speed,
+                                args=(par, sol_V, assets, savings, employed, retirement_age, efter, income, t)
                             )
 
                             sol_V[idx_ret] = value_function_after_retirement(par, sol_V, c_star_u, assets, savings, employed, retirement_age, efter, income, t)
@@ -1023,15 +1048,17 @@ def main_simulation_loop(par, sol, sim, do_print = False):
                 if sim_a[i,t] +sim_income[i,t] - sim_c[i,t] < par.a_min:    
                     sim_c[i,t] = sim_a[i,t] +sim_income[i,t] - par.a_min
 
-
-                # 3.2 labor income
-                sim_w[i,t] = np.minimum(wage(par, sim_k[i,t], t), par.w_max)
-                # 3.3 public benefits
-                sim_chi_payment[i,t] = public_benefit_fct(par, sim_h[i,t], sim_e[i,t], efter, sim_income[i,t], t)
-                # 3.4 income before tax contribution
-                sim_income_before_tax_contrib[i,t] = income_private_fct(par, sim_a[i,t], s_retirement[i], sim_k[i,t], sim_h[i,t], sim_e[i,t], retirement_age[i], efter, t) 
-                # 3.5 tax rate
-                sim_tax_rate[i,t] = tax_rate_fct(par, sim_a[i,t], s_retirement[i], sim_k[i,t], sim_h[i,t], sim_e[i,t], retirement_age[i], efter, t)
+                if par.speed == "ROBUST":
+                    # 3.2 labor income
+                    sim_w[i,t] = np.minimum(wage(par, sim_k[i,t], t), par.w_max)
+                    sim_chi_payment[i,t] = public_benefit_fct(par, sim_h[i,t], sim_e[i,t], efter, sim_income[i,t], t)
+                    sim_income_before_tax_contrib[i,t] = income_private_fct(par, sim_a[i,t], s_retirement[i], sim_k[i,t], sim_h[i,t], sim_e[i,t], retirement_age[i], efter, t) 
+                    sim_tax_rate[i,t] = tax_rate_fct(par, sim_a[i,t], s_retirement[i], sim_k[i,t], sim_h[i,t], sim_e[i,t], retirement_age[i], efter, t)
+                else:
+                    sim_w[i,t] = 0.0
+                    sim_chi_payment[i,t] = 0.0
+                    sim_income_before_tax_contrib[i,t] = 0.0 
+                    sim_tax_rate[i,t] = 0.0
 
                 # 4. Update of states
                 # sim_a[i,t+1] = np.maximum(par.a_min, np.minimum((1+par.r_a)*(sim_a[i,t] + sim_income[i,t] - sim_c[i,t]), par.a_max))
@@ -1098,14 +1125,16 @@ def main_simulation_loop(par, sol, sim, do_print = False):
                 if sim_a[i,t] +sim_income[i,t] - sim_c[i,t] < par.a_min:    
                     sim_c[i,t] = sim_a[i,t] +sim_income[i,t] - par.a_min
 
-                # 3.2 labor income
-                sim_w[i,t] = np.minimum(wage(par, sim_k[i,t], t), par.w_max)
-                # 3.3 public benefits
-                sim_chi_payment[i,t] = public_benefit_fct(par, sim_h[i,t], sim_e[i,t], efter, sim_income[i,t], t)
-                # 3.4 income before tax contribution
-                sim_income_before_tax_contrib[i,t] = income_private_fct(par, sim_a[i,t], s_retirement[i], sim_k[i,t], sim_h[i,t], sim_e[i,t], retirement_age[i], efter, t) 
-                # 3.5 tax rate
-                sim_tax_rate[i,t] = tax_rate_fct(par, sim_a[i,t], s_retirement[i], sim_k[i,t], sim_h[i,t], sim_e[i,t], retirement_age[i], efter, t)
+                if par.speed == "ROBUST":
+                    sim_w[i,t] = np.minimum(wage(par, sim_k[i,t], t), par.w_max)
+                    sim_chi_payment[i,t] = public_benefit_fct(par, sim_h[i,t], sim_e[i,t], efter, sim_income[i,t], t)
+                    sim_income_before_tax_contrib[i,t] = income_private_fct(par, sim_a[i,t], s_retirement[i], sim_k[i,t], sim_h[i,t], sim_e[i,t], retirement_age[i], efter, t) 
+                    sim_tax_rate[i,t] = tax_rate_fct(par, sim_a[i,t], s_retirement[i], sim_k[i,t], sim_h[i,t], sim_e[i,t], retirement_age[i], efter, t)
+                else:
+                    sim_w[i,t] = 0.0
+                    sim_chi_payment[i,t] = 0.0
+                    sim_income_before_tax_contrib[i,t] = 0.0 
+                    sim_tax_rate[i,t] = 0.0
 
                 # 4. Update of states
                 # sim_a[i,t+1] = np.maximum(par.a_min, np.minimum((1+par.r_a)*(sim_a[i,t] + sim_income[i,t] - sim_c[i,t]), par.a_max))
@@ -1169,14 +1198,20 @@ def main_simulation_loop(par, sol, sim, do_print = False):
                 if sim_a[i,t] +sim_income[i,t] - sim_c[i,t] < par.a_min:    
                     sim_c[i,t] = sim_a[i,t] +sim_income[i,t] - par.a_min
 
-                # 3.2 labor income
-                sim_w[i,t] = np.minimum(wage(par, sim_k[i,t], t), par.w_max)
-                # 3.3 public benefits
-                sim_chi_payment[i,t] = public_benefit_fct(par, sim_h[i,t], sim_e[i,t], efter, sim_income[i,t], t)
-                # 3.4 income before tax contribution
-                sim_income_before_tax_contrib[i,t] = income_private_fct(par, sim_a[i,t], s_retirement[i], sim_k[i,t], sim_h[i,t], sim_e[i,t], retirement_age[i], efter, t) 
-                # 3.5 tax rate
-                sim_tax_rate[i,t] = tax_rate_fct(par, sim_a[i,t], s_retirement[i], sim_k[i,t], sim_h[i,t], sim_e[i,t], retirement_age[i], efter, t)
+                if par.speed == "ROBUST":
+                    # 3.2 labor income
+                    sim_w[i,t] = np.minimum(wage(par, sim_k[i,t], t), par.w_max)
+                    # 3.3 public benefits
+                    sim_chi_payment[i,t] = public_benefit_fct(par, sim_h[i,t], sim_e[i,t], efter, sim_income[i,t], t)
+                    # 3.4 income before tax contribution
+                    sim_income_before_tax_contrib[i,t] = income_private_fct(par, sim_a[i,t], s_retirement[i], sim_k[i,t], sim_h[i,t], sim_e[i,t], retirement_age[i], efter, t) 
+                    # 3.5 tax rate
+                    sim_tax_rate[i,t] = tax_rate_fct(par, sim_a[i,t], s_retirement[i], sim_k[i,t], sim_h[i,t], sim_e[i,t], retirement_age[i], efter, t)
+                else:
+                    sim_w[i,t] = 0.0
+                    sim_chi_payment[i,t] = 0.0
+                    sim_income_before_tax_contrib[i,t] = 0.0 
+                    sim_tax_rate[i,t] = 0.0
 
                 # 4. Update of states
                 # sim_a[i,t+1] = np.maximum(par.a_min, np.minimum((1+par.r_a)*(sim_a[i,t] + sim_income[i,t] - sim_c[i,t]), par.a_max))
@@ -1202,14 +1237,18 @@ def main_simulation_loop(par, sol, sim, do_print = False):
 
                 # 3.1 retirement payments
                 sim_s_lr_init[i], sim_s_rp_init[i] = calculate_retirement_payouts(par, sim_h[i,t], s_retirement[i], sim_e[i,t], retirement_age[i], t) # par, h, s, e, r, t
-                # 3.2 labor income
-                sim_w[i,t] = np.minimum(wage(par, sim_k[i,t], t), par.w_max)
-                # 3.3 public benefits
-                sim_chi_payment[i,t] = public_benefit_fct(par, sim_h[i,t], sim_e[i,t], efter, sim_income[i,t], t)
-                # 3.4 income before tax contribution
-                sim_income_before_tax_contrib[i,t] = income_private_fct(par, sim_a[i,t], s_retirement[i], sim_k[i,t], sim_h[i,t], sim_e[i,t], retirement_age[i], efter, t) 
-                # 3.5 tax rate
-                sim_tax_rate[i,t] = tax_rate_fct(par, sim_a[i,t], s_retirement[i], sim_k[i,t], sim_h[i,t], sim_e[i,t], retirement_age[i], efter, t)
+
+                if par.speed == "ROBUST":
+                    # 3.2 labor income
+                    sim_w[i,t] = np.minimum(wage(par, sim_k[i,t], t), par.w_max)
+                    sim_chi_payment[i,t] = public_benefit_fct(par, sim_h[i,t], sim_e[i,t], efter, sim_income[i,t], t)
+                    sim_income_before_tax_contrib[i,t] = income_private_fct(par, sim_a[i,t], s_retirement[i], sim_k[i,t], sim_h[i,t], sim_e[i,t], retirement_age[i], efter, t) 
+                    sim_tax_rate[i,t] = tax_rate_fct(par, sim_a[i,t], s_retirement[i], sim_k[i,t], sim_h[i,t], sim_e[i,t], retirement_age[i], efter, t)
+                else:
+                    sim_w[i,t] = 0.0
+                    sim_chi_payment[i,t] = 0.0
+                    sim_income_before_tax_contrib[i,t] = 0.0 
+                    sim_tax_rate[i,t] = 0.0
 
                 if t < retirement_age[i] + par.m: 
                     # 4. Update of states
@@ -1226,5 +1265,10 @@ def main_simulation_loop(par, sol, sim, do_print = False):
                     sim_k[i,t+1] = np.minimum(((1-par.delta)*sim_k[i,t])*sim_xi[i,t], par.k_max[t])
                     
 
+    # if par.speed == "ROBUST":
     return sim_a, sim_s, sim_k, sim_c, sim_h, sim_w, sim_ex, sim_e, sim_chi_payment, sim_tax_rate, sim_income_before_tax_contrib, s_retirement, retirement_age, sim_income, sim_ret_flag 
+
+    # else:
+    #     return sim_a, sim_s, sim_k, sim_c, sim_h, sim_ex, sim_e, s_retirement, retirement_age, sim_income, sim_ret_flag 
+
 

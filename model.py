@@ -23,7 +23,7 @@ class ModelClass(EconModelClass):
         par = self.par
 
         # Optimization settings
-        par.opt_tol = 1e-4
+        par.speed = "FAST" # "FAST", "ROBUST"  
 
         # Time
         par.start_age = 30  # Time when agents enter the workforce
@@ -324,7 +324,9 @@ class ModelClass(EconModelClass):
             par = model.par
             sol = model.sol
             sim = model.sim 
+
             sim.a[:,:], sim.s[:,:], sim.k[:,:], sim.c[:,:], sim.h[:,:], sim.w[:,:], sim.ex[:,:], sim.e[:,:], sim.chi_payment[:,:], sim.tax_rate[:,:], sim.income_before_tax_contrib[:,:], sim.s_retirement[:], sim.retirement_age[:], sim.income[:,:], sim.ret_flag[:,:] = main_simulation_loop(par, sol, sim)
+
 
 
     # def simulate_unanticipated(self, old_model):
