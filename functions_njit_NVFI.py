@@ -30,10 +30,23 @@ def utility(par, c, h, k, t):
 def utility_c(par, c):
     return ((c+1)**(1-par.sigma))/(1-par.sigma)
 
+@jit_if_enabled(fastmath=False)
+def marg_utility_c(par, c):
+    return (c+1)**(-par.sigma)
+
+@jit_if_enabled(fastmath=False)
+def inv_marg_utility_c(par, mu):
+    mu_adj = max(mu, 1e-12)
+    return mu_adj**(-1.0/par.sigma) - 1.0
+
 
 @jit_if_enabled(fastmath=False)
 def bequest(par, a):
     return par.mu*(a+par.a_bar)**(1-par.sigma) / (1-par.sigma)
+
+@jit_if_enabled(fastmath=False)
+def marg_bequest(par, a):
+    return par.mu*(a+par.a_bar)**(-par.sigma)
 
 @jit_if_enabled(fastmath=False)
 def wage(par, k, t):
@@ -468,6 +481,86 @@ def value_function_NVFI(h, par, sol_c_given_m, sol_EV, a, s, k, e, r, ef, t):
 def obj_hours_NVFI(h, par, sol_c_given_m, sol_EV, a, s, k, e, r, ef, t):
     return -value_function_NVFI(h, par, sol_c_given_m, sol_EV, a, s, k, e, r, ef, t)
 
+@jit_if_enabled(fastmath=False)
+def continuation_derivative_a(par, sol_EV, a_next, s_next, k_next, t):
+    a_grid = par.a_grid
+    if len(a_grid) == 1:
+        return 0.0
+
+    eps = max(1e-8, 1e-6*(a_grid[-1] - a_grid[0]))
+    a_low = max(a_grid[0], a_next - eps)
+    a_high = min(a_grid[-1], a_next + eps)
+
+    if a_high <= a_low:
+        if a_next <= a_grid[0]:
+            a_low = a_grid[0]
+            a_high = min(a_grid[-1], a_grid[0] + eps)
+        else:
+            a_high = a_grid[-1]
+            a_low = max(a_grid[0], a_grid[-1] - eps)
+
+    if a_high <= a_low:
+        return 0.0
+
+    EV_low = interp_3d(par.a_grid, par.s_grid, par.k_grid[t], sol_EV, a_low, s_next, k_next)
+    EV_high = interp_3d(par.a_grid, par.s_grid, par.k_grid[t], sol_EV, a_high, s_next, k_next)
+    return (EV_high - EV_low)/(a_high - a_low)
+
+@jit_if_enabled(fastmath=False)
+def compute_c_given_m_dc_egm(par, sol_c_given_m, sol_EV, t, retirement_age_idx, employed):
+    a_grid_pd = par.a_grid.copy()
+    a_grid_pd[0] = 0.0
+
+    a_grid_m = par.a_m_grid[t, :, retirement_age_idx, employed]
+    s_grid_m = par.s_m_grid[t, :, retirement_age_idx, employed]
+    k_grid_m = par.k_m_grid[t, :, retirement_age_idx, employed]
+
+    a_endo = np.empty(par.N_a)
+    c_endo = np.empty(par.N_a)
+
+    for s_idx in range(par.N_s):
+        s_m = s_grid_m[s_idx]
+        s_next = (1+par.r_s)*s_m
+
+        for k_idx in range(par.N_k):
+            k_m = k_grid_m[k_idx]
+            k_next = (1-par.delta)*k_m
+
+            for a_idx in range(par.N_a):
+                a_pd = a_grid_pd[a_idx]
+                a_next = (1+par.r_a)*a_pd
+
+                cont_a = continuation_derivative_a(par, sol_EV, a_next, s_next, k_next, t)
+                rhs = (1+par.r_a)*(par.pi[t]*par.beta*cont_a + (1-par.pi[t])*marg_bequest(par, a_next))
+                c = max(par.c_min, inv_marg_utility_c(par, rhs))
+
+                c_endo[a_idx] = c
+                a_endo[a_idx] = a_pd + c
+
+            for a_idx in range(par.N_a):
+                a_m = a_grid_m[a_idx]
+                if a_m <= a_endo[0]:
+                    c_interp = max(par.c_min, a_m)
+                else:
+                    c_interp = interp_1d(a_endo, c_endo, a_m)
+
+                sol_c_given_m[t, a_idx, s_idx, k_idx, retirement_age_idx, employed] = min(max(c_interp, par.c_min), a_m)
+
+@jit_if_enabled(fastmath=False)
+def discrete_hours_choice(par, sol_c_given_m, sol_EV, a, s, k, e, r, ef, t):
+    best_h = par.h_grid[0]
+    best_v = value_function_NVFI(best_h, par, sol_c_given_m, sol_EV, a, s, k, e, r, ef, t)
+
+    for i_h in range(1, par.Nh):
+        h = par.h_grid[i_h]
+        v = value_function_NVFI(h, par, sol_c_given_m, sol_EV, a, s, k, e, r, ef, t)
+
+        if v > best_v:
+            best_v = v
+            best_h = h
+
+    return best_h, best_v
+
 # 4. Objective functions 
 @jit_if_enabled(fastmath=False)
 def obj_consumption(c, par, sol_V, sol_EV, h, a, s, k, e, r, ef, income, retirement_contribution, t):
@@ -549,7 +642,7 @@ def main_solver_loop(par, sol, do_print = False):
                         pass
 
                     if employed == par.emp:
-                        if par.flexible_hours == "NVFI":
+                        if par.flexible_hours == "NVFI" or par.flexible_hours == "DC-EGM":
 
                             income, retirement_contribution = final_income_and_retirement_contri(par, par.a_grid[-1], par.s_grid[-1], par.k_grid[t][-1], par.h_max, employed, retirement_age, efter, t)
 
@@ -574,16 +667,20 @@ def main_solver_loop(par, sol, do_print = False):
                                 idx = (t, a_idx, s_idx, k_idx, retirement_age_idx, employed)
                                 idx_next = (t+1, a_idx, s_idx, k_idx, retirement_age_idx, employed)
                                 
-                                sol_c_given_m[idx] = optimizer_with_start(
-                                    obj_consumption_given_m,
-                                    optimizer_guess(sol_c_given_m[idx_next], par.c_min, a_m),
-                                    par.c_min,
-                                    a_m,
-                                    par.speed,
-                                    args=(par, sol_EV, a_m, s_m, k_m, t)
-                                ) 
+                                if par.flexible_hours == "NVFI":
+                                    sol_c_given_m[idx] = optimizer_with_start(
+                                        obj_consumption_given_m,
+                                        optimizer_guess(sol_c_given_m[idx_next], par.c_min, a_m),
+                                        par.c_min,
+                                        a_m,
+                                        par.speed,
+                                        args=(par, sol_EV, a_m, s_m, k_m, t)
+                                    )
                             else:
                                 pass
+
+                            if par.flexible_hours == "DC-EGM":
+                                compute_c_given_m_dc_egm(par, sol_c_given_m, sol_EV, t, retirement_age_idx, employed)
                     
 
                 for flat in prange(N_total):
@@ -710,24 +807,47 @@ def main_solver_loop(par, sol, do_print = False):
                                         par.speed,
                                         args=(par, sol_c_given_m, sol_EV, assets, savings, human_capital, employed, retirement_age, efter, t)
                                     )
+                                elif par.flexible_hours == "DC-EGM":
+                                    h_star, val = discrete_hours_choice(
+                                        par, sol_c_given_m, sol_EV, assets, savings, human_capital, employed, retirement_age, efter, t
+                                    )
                                 else:
                                     h_star = par.hours_mean
 
                                 income, retirement_contribution = final_income_and_retirement_contri(par, assets, savings, human_capital, h_star, employed, retirement_age, efter, t)
+                                if par.flexible_hours == "DC-EGM":
+                                    a_m = assets + income
+                                    s_m = savings + retirement_contribution
+                                    k_m = human_capital + h_star / (1 - par.delta)
 
-                                bc_min, bc_max = budget_constraint(par, h_star, assets, savings, human_capital, employed, retirement_age, efter, income, t)
+                                    a_grid_m = par.a_m_grid[t, :, retirement_age_idx, employed]
+                                    s_grid_m = par.s_m_grid[t, :, retirement_age_idx, employed]
+                                    k_grid_m = par.k_m_grid[t, :, retirement_age_idx, employed]
 
-                                c_star = optimizer_with_start(
-                                    obj_consumption,
-                                    optimizer_guess(sol_c[idx_next], bc_min, bc_max),
-                                    bc_min,
-                                    bc_max,
-                                    par.speed,
-                                    args=(par, sol_V, sol_EV, h_star, assets, savings, human_capital, employed, retirement_age, efter, income, retirement_contribution, t)
-                                )
+                                    a_m = min(max(a_m, a_grid_m[0]), a_grid_m[-1])
+                                    s_m = min(max(s_m, s_grid_m[0]), s_grid_m[-1])
+                                    k_m = min(max(k_m, k_grid_m[0]), k_grid_m[-1])
 
-                                val = value_function(par, sol_V, sol_EV, c_star, h_star, assets, savings, human_capital, employed, retirement_age, efter, income, retirement_contribution, t)
-                                
+                                    c_star = interp_3d(
+                                        a_grid_m, s_grid_m, k_grid_m,
+                                        sol_c_given_m[t, :, :, :, retirement_age_idx, employed],
+                                        a_m, s_m, k_m
+                                    )
+                                    c_star = min(max(c_star, par.c_min), a_m)
+                                else:
+                                    bc_min, bc_max = budget_constraint(par, h_star, assets, savings, human_capital, employed, retirement_age, efter, income, t)
+
+                                    c_star = optimizer_with_start(
+                                        obj_consumption,
+                                        optimizer_guess(sol_c[idx_next], bc_min, bc_max),
+                                        bc_min,
+                                        bc_max,
+                                        par.speed,
+                                        args=(par, sol_V, sol_EV, h_star, assets, savings, human_capital, employed, retirement_age, efter, income, retirement_contribution, t)
+                                    )
+
+                                    val = value_function(par, sol_V, sol_EV, c_star, h_star, assets, savings, human_capital, employed, retirement_age, efter, income, retirement_contribution, t)
+
                                 sol_V[idx] = val
                                 sol_h[idx]  = h_star
                                 sol_c[idx] = c_star
@@ -767,23 +887,46 @@ def main_solver_loop(par, sol, do_print = False):
                                         par.speed,
                                         args=(par, sol_c_given_m, sol_EV, assets, savings, human_capital, employed, retirement_age, efter, t)
                                     )
+                                elif par.flexible_hours == "DC-EGM":
+                                    h_star, val = discrete_hours_choice(
+                                        par, sol_c_given_m, sol_EV, assets, savings, human_capital, employed, retirement_age, efter, t
+                                    )
                                 else:
                                     h_star = par.hours_mean
 
                                 income, retirement_contribution = final_income_and_retirement_contri(par, assets, savings, human_capital, h_star, employed, retirement_age, efter, t)
+                                if par.flexible_hours == "DC-EGM":
+                                    a_m = assets + income
+                                    s_m = savings + retirement_contribution
+                                    k_m = human_capital + h_star / (1 - par.delta)
 
-                                bc_min, bc_max = budget_constraint(par, h_star, assets, savings, human_capital, employed, retirement_age, efter, income, t)
+                                    a_grid_m = par.a_m_grid[t, :, retirement_age_idx, employed]
+                                    s_grid_m = par.s_m_grid[t, :, retirement_age_idx, employed]
+                                    k_grid_m = par.k_m_grid[t, :, retirement_age_idx, employed]
 
-                                c_star = optimizer_with_start(
-                                    obj_consumption,
-                                    optimizer_guess(sol_c[idx_next], bc_min, bc_max),
-                                    bc_min,
-                                    bc_max,
-                                    par.speed,
-                                    args=(par, sol_V, sol_EV, h_star, assets, savings, human_capital, employed, retirement_age, efter, income, retirement_contribution, t)
-                                )
+                                    a_m = min(max(a_m, a_grid_m[0]), a_grid_m[-1])
+                                    s_m = min(max(s_m, s_grid_m[0]), s_grid_m[-1])
+                                    k_m = min(max(k_m, k_grid_m[0]), k_grid_m[-1])
 
-                                val = value_function(par, sol_V, sol_EV, c_star, h_star, assets, savings, human_capital, employed, retirement_age, efter, income, retirement_contribution, t)
+                                    c_star = interp_3d(
+                                        a_grid_m, s_grid_m, k_grid_m,
+                                        sol_c_given_m[t, :, :, :, retirement_age_idx, employed],
+                                        a_m, s_m, k_m
+                                    )
+                                    c_star = min(max(c_star, par.c_min), a_m)
+                                else:
+                                    bc_min, bc_max = budget_constraint(par, h_star, assets, savings, human_capital, employed, retirement_age, efter, income, t)
+
+                                    c_star = optimizer_with_start(
+                                        obj_consumption,
+                                        optimizer_guess(sol_c[idx_next], bc_min, bc_max),
+                                        bc_min,
+                                        bc_max,
+                                        par.speed,
+                                        args=(par, sol_V, sol_EV, h_star, assets, savings, human_capital, employed, retirement_age, efter, income, retirement_contribution, t)
+                                    )
+
+                                    val = value_function(par, sol_V, sol_EV, c_star, h_star, assets, savings, human_capital, employed, retirement_age, efter, income, retirement_contribution, t)
 
                                 cash_on_hand = assets + income
                                 sol_V[idx] = val
@@ -875,23 +1018,46 @@ def main_solver_loop(par, sol, do_print = False):
                                     par.speed,
                                     args=(par, sol_c_given_m, sol_EV, assets, savings, human_capital, employed, retirement_age, efter, t)
                                 )
+                            elif par.flexible_hours == "DC-EGM":
+                                h_star, val = discrete_hours_choice(
+                                    par, sol_c_given_m, sol_EV, assets, savings, human_capital, employed, retirement_age, efter, t
+                                )
                             else:
                                 h_star = par.hours_mean
 
                             income, retirement_contribution = final_income_and_retirement_contri(par, assets, savings, human_capital, h_star, employed, retirement_age, efter, t)
+                            if par.flexible_hours == "DC-EGM":
+                                a_m = assets + income
+                                s_m = savings + retirement_contribution
+                                k_m = human_capital + h_star / (1 - par.delta)
 
-                            bc_min, bc_max = budget_constraint(par, h_star, assets, savings, human_capital, employed, retirement_age, efter, income, t)
+                                a_grid_m = par.a_m_grid[t, :, retirement_age_idx, employed]
+                                s_grid_m = par.s_m_grid[t, :, retirement_age_idx, employed]
+                                k_grid_m = par.k_m_grid[t, :, retirement_age_idx, employed]
 
-                            c_star = optimizer_with_start(
-                                obj_consumption,
-                                optimizer_guess(sol_c[idx_next], bc_min, bc_max),
-                                bc_min,
-                                bc_max,
-                                par.speed,
-                                args=(par, sol_V, sol_EV, h_star, assets, savings, human_capital, employed, retirement_age, efter, income, retirement_contribution, t)
-                            )
+                                a_m = min(max(a_m, a_grid_m[0]), a_grid_m[-1])
+                                s_m = min(max(s_m, s_grid_m[0]), s_grid_m[-1])
+                                k_m = min(max(k_m, k_grid_m[0]), k_grid_m[-1])
 
-                            val = value_function(par, sol_V, sol_EV, c_star, h_star, assets, savings, human_capital, employed, retirement_age, efter, income, retirement_contribution, t)
+                                c_star = interp_3d(
+                                    a_grid_m, s_grid_m, k_grid_m,
+                                    sol_c_given_m[t, :, :, :, retirement_age_idx, employed],
+                                    a_m, s_m, k_m
+                                )
+                                c_star = min(max(c_star, par.c_min), a_m)
+                            else:
+                                bc_min, bc_max = budget_constraint(par, h_star, assets, savings, human_capital, employed, retirement_age, efter, income, t)
+
+                                c_star = optimizer_with_start(
+                                    obj_consumption,
+                                    optimizer_guess(sol_c[idx_next], bc_min, bc_max),
+                                    bc_min,
+                                    bc_max,
+                                    par.speed,
+                                    args=(par, sol_V, sol_EV, h_star, assets, savings, human_capital, employed, retirement_age, efter, income, retirement_contribution, t)
+                                )
+
+                                val = value_function(par, sol_V, sol_EV, c_star, h_star, assets, savings, human_capital, employed, retirement_age, efter, income, retirement_contribution, t)
                             # cash_on_hand = assets + income
                             sol_V[idx] = val
                             sol_c[idx] = c_star

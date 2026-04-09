@@ -95,7 +95,7 @@ class ModelClass(EconModelClass):
         par.efterloen = 19194 * 12
         par.efter = 1
 
-        par.flexible_hours = "NVFI"
+        par.flexible_hours = "DC-EGM"  # "VFI", "NVFI", or "DC-EGM"
         par.hours_mean = 0.8
 
         # Means testing retirement payment
@@ -170,6 +170,8 @@ class ModelClass(EconModelClass):
 
         par.h_min  = 0.2
         par.h_max  = 1.2
+        par.h_grid = np.array([0.2, 0.4, 0.6, 0.8, 1.0, 1.2])
+        par.Nh = len(par.h_grid)
 
         par.c_min  = 1
         par.c_max  = np.inf
