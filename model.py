@@ -108,7 +108,7 @@ class ModelClass(EconModelClass):
 
         # unemployment benefit
 
-        par.early_benefit = 230328
+        par.early_benefit = np.array([213555.957306 if t < 30 else 166971.381952 for t in range(par.T) ])
         par.unemployment_benefit = 137520
 
 
