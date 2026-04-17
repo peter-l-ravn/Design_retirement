@@ -105,7 +105,7 @@ def public_benefit_fct(par, h, e, ef, income, t):
             return max(par.unemployment_benefit - income, 0)
         elif e == par.ret:
             # Retirement benefits
-            return par.early_benefit
+            return par.early_benefit[t]
         else:
             print("Error: Invalid employment status")
             return par.unemployment_benefit
@@ -118,7 +118,7 @@ def public_benefit_fct(par, h, e, ef, income, t):
                 return max(par.efterloen - income*par.rho_ef, 0)
             elif e == par.ret:
                 # Retirement benefits
-                return par.early_benefit
+                return par.early_benefit[t]
         else: # overførsel, hvis ikke ret til efterløn
             if h > 0.0:
                 return 0.0
@@ -127,7 +127,7 @@ def public_benefit_fct(par, h, e, ef, income, t):
                 return max(par.unemployment_benefit - income, 0)
             elif e == par.ret:
                 # Retirement benefits
-                return par.early_benefit
+                return par.early_benefit[t]
     # public retirement benefits
     else:
         # return max(par.chi_base, par.chi_total - income*par.rho)
