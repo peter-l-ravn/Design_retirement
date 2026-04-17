@@ -24,11 +24,11 @@ from consav_grids import nonlinspace
 def utility(par, c, h, k, t):
     work_dummy = 1 if (t>=par.retirement_age and h==0) else 0
     # return ((c+1)**(1-par.sigma))/(1-par.sigma) + par.dummy*work_dummy - (par.zeta/(1+k)) * (h**(1+par.gamma))/(1+par.gamma) - par.gamma_1*h*t**2
-    return ((c+1)**(1-par.sigma))/(1-par.sigma) - (par.zeta/(1+k)) * (h**(1+par.gamma))/(1+par.gamma) - par.gamma_1*h*(np.exp((t - par.retirement_age)/par.gamma_2))/(1 + np.exp((t - par.retirement_age)/par.gamma_2))
+    return (((c+1)/(par.w_0*par.full_time_hours))**(1-par.sigma))/(1-par.sigma) - (par.zeta) * (h**(1+par.gamma))/(1+par.gamma) - par.gamma_1*h*(np.exp((t - par.retirement_age)/par.gamma_2))/(1 + np.exp((t - par.retirement_age)/par.gamma_2))
 
 @jit_if_enabled(fastmath=False)
 def utility_c(par, c):
-    return ((c+1)**(1-par.sigma))/(1-par.sigma)
+    return (((c+1)/(par.w_0*par.full_time_hours))**(1-par.sigma))/(1-par.sigma)
 
 @jit_if_enabled(fastmath=False)
 def marg_utility_c(par, c):
@@ -42,11 +42,11 @@ def inv_marg_utility_c(par, mu):
 
 @jit_if_enabled(fastmath=False)
 def bequest(par, a):
-    return par.mu*(a+par.a_bar)**(1-par.sigma) / (1-par.sigma)
+    return par.mu*((a+par.a_bar)/(par.w_0*par.full_time_hours))**(1-par.sigma) / (1-par.sigma)
 
 @jit_if_enabled(fastmath=False)
 def marg_bequest(par, a):
-    return par.mu*(a+par.a_bar)**(-par.sigma)
+    return par.mu*((a+par.a_bar)/(par.w_0*par.full_time_hours))**(-par.sigma)
 
 @jit_if_enabled(fastmath=False)
 def wage(par, k, t):
@@ -102,13 +102,13 @@ def public_benefit_fct(par, h, e, ef, income, t):
             return 0.0
         elif e == par.emp or e == par.unemp:
             # Unemployment benefits
-            return max(par.unemployment_benefit[t,0] - income, 0)
+            return max(par.unemployment_benefit - income, 0)
         elif e == par.ret:
             # Retirement benefits
-            return par.early_benefit[t]
+            return par.early_benefit
         else:
             print("Error: Invalid employment status")
-            return par.unemployment_benefit[t][0]
+            return par.unemployment_benefit
     
     elif t < par.retirement_age:
         if ef == 1: # overførsel for efterløn
@@ -118,16 +118,16 @@ def public_benefit_fct(par, h, e, ef, income, t):
                 return max(par.efterloen - income*par.rho_ef, 0)
             elif e == par.ret:
                 # Retirement benefits
-                return par.early_benefit[t]
+                return par.early_benefit
         else: # overførsel, hvis ikke ret til efterløn
             if h > 0.0:
                 return 0.0
             elif e == par.emp or e == par.unemp:
                 # Unemployment benefits
-                return max(par.unemployment_benefit[t,0] - income, 0)
+                return max(par.unemployment_benefit - income, 0)
             elif e == par.ret:
                 # Retirement benefits
-                return par.early_benefit[t]
+                return par.early_benefit
     # public retirement benefits
     else:
         # return max(par.chi_base, par.chi_total - income*par.rho)
@@ -363,7 +363,7 @@ def calculate_last_period_consumption(par, a, s, e, r, t):
         # With bequest motive
         return max(((1/(1+(par.mu*(1+par.r_a))**(-1/par.sigma)*(1+par.r_a))) 
                     * (par.mu*(1+par.r_a))**(-1/par.sigma) 
-                    * ((1+par.r_a)*(a+income)+par.a_bar)), 0)
+                    * (((1+par.r_a)*(a+income)+par.a_bar)/(par.w_0*par.full_time_hours))), 0)
     
     else: 
         # No bequest motive
@@ -697,6 +697,7 @@ def main_solver_loop(par, sol, do_print = False):
                     idx_next = (t+1, a_idx, s_idx, k_idx, retirement_age_idx, employed)
                     idx_ret = (t, a_idx, s_idx, slice(None), retirement_age_idx, employed)
 
+
                     if t == par.T - 1: # Last period
                         if k_idx == 0: # No capital
                             income, _ = final_income_and_retirement_contri(par, assets, savings, human_capital_unemp, hours_unemp, employed, retirement_age, efter, t)
@@ -711,6 +712,8 @@ def main_solver_loop(par, sol, do_print = False):
                                 print("val is nan in first", idx, sol_V[idx])
                         else:
                             pass
+
+                    
 
                     elif t > retirement_age: # After retirement age, with "ratepension"
                         if t>= par.retirement_age:

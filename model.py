@@ -45,17 +45,6 @@ class ModelClass(EconModelClass):
         par.r_s  = par.renten*(1-0.153)
         par.r_a = par.renten*(1-0.42)
 
-        # assets 
-        # par.r_a    = 0.010049
-        # par.r_s    = 0.016058 # np.mean(np.array(pd.read_csv("Data/mean_matrix.csv")['rente_pension_sum'])[:60])
-        
-        # wage and human capital
-        # par.w_0 =       136.083656
-        # par.k_0 =        11.140278
-        # par.beta_1 =         0.0500726898
-        # par.beta_2 =        -0.000456
-        # par.delta =         0.027943
-        # par.k_0_var =         0.049583
 
 
         par.w_0 =    136.83
@@ -100,7 +89,7 @@ class ModelClass(EconModelClass):
 
         # Means testing retirement payment
         # par.chi_base = 90528 # 7544 * 12
-        # par.chi_total = 169704 # (16.273 + 12.011) * 12
+        # par.chi_total = 169704 # (16.273 + 12.011) / 2 * 12
         par.chi_base = 90528.0
         par.chi_total = 79176.0 + par.chi_base #=(7198+462)
         par.fradrag = 150_000.0
@@ -118,12 +107,9 @@ class ModelClass(EconModelClass):
         par.initial_ex = par.p_e_1[0]
 
         # unemployment benefit
-        # early_coefficients = pd.read_csv('coefs_early_benefit.csv', header=None).to_numpy()
-        # unemployment_coefficients = pd.read_csv("coefs_unemployment_benefit.csv",header=None).to_numpy()
-        par.early_benefit = np.array([np.nanmean(pd.read_csv('Data ny def/mean_matrix.csv')['overfor_2'][:30]) if t < 30 else np.nanmean(pd.read_csv('Data ny def/mean_matrix.csv')['overfor_2'][30:]) for t in range(par.T) ])
-        coefs = pd.read_csv("coefs_unemployment_benefit.csv",header=None).to_numpy()
-        part_1 = np.hstack([np.vstack([np.arange(70)**i for i in range(2)]).T]) @ coefs 
-        par.unemployment_benefit = np.array([part_1[t] if t <30  else  part_1[30] for t in range(par.T)]) 
+
+        par.early_benefit = 230328
+        par.unemployment_benefit = 137520
 
 
         # life time 
@@ -143,14 +129,6 @@ class ModelClass(EconModelClass):
                 for r in range(par.T)
             ])
 
-
-        # Welfare system
-        # par.replacement_rate_bf_start = 8
-        # par.replacement_rate_bf_end = 6
-        # par.replacement_rate_af_start = 3
-        # par.start_before = par.retirement_age-par.replacement_rate_bf_start
-        # par.end_before = par.retirement_age-par.replacement_rate_bf_end
-        # par.after_retirement = par.retirement_age +par.replacement_rate_af_start
 
 
         # State values
@@ -195,12 +173,6 @@ class ModelClass(EconModelClass):
 
         # # Retirement system
         par.last_retirement = 55
-
-        # benefits
-        # par.early_benefit = np.array([np.nanmean(pd.read_csv('Data ny def/mean_matrix.csv')['overfor_2'][:30]) if t < par.first_retirement else np.nanmean(pd.read_csv('Data ny def/mean_matrix.csv')['overfor_2'][30:]) for t in range(par.T) ])
-        # coefs = pd.read_csv("coefs_unemployment_benefit.csv",header=None).to_numpy()
-        # part_1 = np.hstack([np.vstack([np.arange(70)**i for i in range(2)]).T]) @ coefs 
-        # par.unemployment_benefit = np.array([part_1[t] if t <(30)  else  part_1[30] for t in range(par.T)]) 
 
         # survival probabilities
         par.pi = np.array([logistic(i,par.L, par.f, par.x0) for i in range(par.T)] )
