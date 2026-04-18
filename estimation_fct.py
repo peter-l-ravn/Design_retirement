@@ -145,8 +145,8 @@ def simulate_moments(theta, theta_names, model):
             model.simulate()
 
             sim_mean = [
-                np.nan_to_num(np.nanmean(np.where(model.sim.ex == 1, model.sim.h, np.nan), axis=0)[:45], nan=0.0),
-                np.mean(model.sim.ex, axis=0)[:45],
+                np.nan_to_num(np.nanmean(np.where(model.sim.ex == 1, model.sim.h, np.nan), axis=0), nan=0.0),
+                np.mean(model.sim.ex, axis=0),
                 np.mean(model.sim.a, axis=0),
                 np.clip(np.mean(model.sim.s, axis=0), 0, None)
             ]
@@ -156,7 +156,7 @@ def simulate_moments(theta, theta_names, model):
     # 3. Return the expanded vector of simulated moments
     return sim_means
 
-def obj_func(scaled_theta, theta_names, mom_data, W, model, bounds, do_print=False, return_extra_info=False):
+def obj_func(scaled_theta, theta_names, wealth, extensive, intensive, model, bounds, do_print=False, return_extra_info=False):
     start_time = time.time()  # Start timing
 
     theta = unscale_params(scaled_theta, bounds)
@@ -174,9 +174,35 @@ def obj_func(scaled_theta, theta_names, mom_data, W, model, bounds, do_print=Fal
 
         hours_mean, extensive_mean, liquid_mean, _ = calc_means(sim_means, params)
 
-        mom_sim = np.concatenate([extensive_mean[9:45], liquid_mean[4:45], hours_mean[27:40]])
+        extensive_idx = extensive["alder"] - 30
+        intensive_idx = intensive["alder"] - 30
+        wealth_idx = wealth["alder"] - 30
 
-        return (mom_data - mom_sim).T @ W @ (mom_data - mom_sim)
+        moment_mean = np.concatenate([extensive["mean_extensive"], wealth["mean_wealth"], intensive["mean_intensive"]])
+
+
+        # variance_cut = np.concatenate([extensive["se_extensive"]**2, 
+        #                             wealth["se_wealth"]**2, 
+        #                             intensive["se_intensive"]**2])
+
+
+        se = np.concatenate([
+            extensive["se_extensive"],
+            wealth["se_wealth"],
+            intensive["se_intensive"]
+        ])
+
+        var = se**2
+        wdiag = 1 / var
+
+        # normalize by average diagonal element
+        W = wdiag / np.mean(wdiag)
+
+        W = np.diag(W)
+
+        mom_sim = np.concatenate([extensive_mean[extensive_idx], liquid_mean[wealth_idx], hours_mean[intensive_idx]])
+
+        return (moment_mean - mom_sim).T @ W @ (moment_mean - mom_sim)
     
 
     def calc_means(sim_means, params):
