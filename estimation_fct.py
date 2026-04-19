@@ -156,10 +156,13 @@ def simulate_moments(theta, theta_names, model):
     # 3. Return the expanded vector of simulated moments
     return sim_means
 
-def obj_func(scaled_theta, theta_names, wealth, extensive, intensive, model, bounds, do_print=False, return_extra_info=False):
+def obj_func(scaled_theta, theta_names, wealth, extensive, intensive, model, bounds, do_print=False, return_extra_info=False, scaled=True):
     start_time = time.time()  # Start timing
 
-    theta = unscale_params(scaled_theta, bounds)
+    if scaled:
+        theta = unscale_params(scaled_theta, bounds)
+    else:
+        theta = scaled_theta
 
     if do_print: 
         print_str = ''
