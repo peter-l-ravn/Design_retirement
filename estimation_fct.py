@@ -156,7 +156,7 @@ def simulate_moments(theta, theta_names, model):
     # 3. Return the expanded vector of simulated moments
     return sim_means
 
-def obj_func(scaled_theta, theta_names, wealth, extensive, intensive, model, bounds, do_print=False, return_extra_info=False, scaled=True):
+def obj_func(scaled_theta, theta_names, wealth, extensive, intensive, model, bounds, do_print=False, return_extra_info=False, scaled=True, mean_se=False):
     start_time = time.time()  # Start timing
 
     if scaled:
@@ -188,14 +188,24 @@ def obj_func(scaled_theta, theta_names, wealth, extensive, intensive, model, bou
         #                             wealth["se_wealth"]**2, 
         #                             intensive["se_intensive"]**2])
 
+        if mean_se:
+            se = np.concatenate([
+                np.full(len(extensive["mean_extensive"]), np.nanmean(extensive["mean_extensive"])**2 / 2),
+                np.full(len(wealth["mean_wealth"]), np.nanmean(wealth["mean_wealth"])**2),
+                np.full(len(intensive["mean_intensive"]), np.nanmean(intensive["mean_intensive"])**2 / 4)
+            ])
 
-        se = np.concatenate([
-            extensive["se_extensive"],
-            wealth["se_wealth"],
-            intensive["se_intensive"]
-        ])
+            var = se
 
-        var = se**2
+        else:
+            se = np.concatenate([
+                extensive["se_extensive"],
+                wealth["se_wealth"],
+                intensive["se_intensive"]
+            ])
+
+            var = se**2
+
         wdiag = 1 / var
 
         # normalize by average diagonal element

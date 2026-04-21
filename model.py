@@ -85,7 +85,7 @@ class ModelClass(EconModelClass):
         par.efter = 1
 
         par.flexible_hours = "DC-EGM"  # "VFI", "NVFI", or "DC-EGM"
-        par.hours_mean = 0.8
+        par.hours_mean = 1.0
 
         # Means testing retirement payment
         # par.chi_base = 90528 # 7544 * 12

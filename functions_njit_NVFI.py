@@ -372,13 +372,17 @@ def calculate_last_period_consumption(par, a, s, e, r, t):
 
 # 3. Value functions
 @jit_if_enabled(fastmath=False)
-def value_last_period(par, c, a, s, e, r, t):
+def value_last_period(c, par, a, s, e, r, t):
     # states and income 
     h, k, ef = 0.0,0.0, 0.0
     income, _ = final_income_and_retirement_contri(par, a, s, k, h, e, r, ef, t)
     a_next = (1+par.r_a)*(a + income - c)
 
     return utility(par, c, h, k, t) + bequest(par, a_next)
+
+@jit_if_enabled(fastmath=False)
+def obj_value_func_last_period(c, par, a, s, e, r, t):
+    return -value_last_period(c, par, a, s, e, r, t)
 
 
 @jit_if_enabled(fastmath=False)
@@ -702,11 +706,24 @@ def main_solver_loop(par, sol, do_print = False):
                         if k_idx == 0: # No capital
                             income, _ = final_income_and_retirement_contri(par, assets, savings, human_capital_unemp, hours_unemp, employed, retirement_age, efter, t)
 
-                            sol_c[idx_ret] = calculate_last_period_consumption(par, assets, savings, employed, retirement_age, t)
+                            bc_min, bc_max = budget_constraint(par, hours_unemp, assets, savings, human_capital_unemp, employed, retirement_age, efter, income, t)
+
+                            c_guess = (bc_max - bc_min) / 2
+
+                            c_star = optimizer_with_start(
+                                obj_value_func_last_period,
+                                c_guess, 
+                                bc_min,
+                                bc_max,
+                                par.speed,
+                                args=(par, assets, savings, employed, retirement_age, t)
+                            )
+
+                            sol_c[idx_ret] = c_star
                             # sol_a[idx_ret] = (1+par.r_a)*(cash_on_hand - sol_c[idx])
                             # sol_ex[idx_ret] = e_unemployed
                             sol_h[idx_ret] = hours_unemp
-                            sol_V[idx_ret] = value_last_period(par, sol_c[idx], assets, savings, employed, retirement_age, t)
+                            sol_V[idx_ret] = value_last_period(sol_c[idx], par, assets, savings, employed, retirement_age, t)
 
                             if math.isnan(sol_V[idx]):
                                 print("val is nan in first", idx, sol_V[idx])
