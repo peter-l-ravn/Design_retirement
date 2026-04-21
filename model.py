@@ -84,7 +84,7 @@ class ModelClass(EconModelClass):
         par.efterloen = 19194 * 12
         par.efter = 1
 
-        par.flexible_hours = "DC-EGM"  # "VFI", "NVFI", or "DC-EGM"
+        par.flexible_hours = "NVFI"  # "VFI", "NVFI", or "DC-EGM"
         par.hours_mean = 1.0
 
         # Means testing retirement payment

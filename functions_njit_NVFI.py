@@ -1154,13 +1154,15 @@ def main_simulation_loop(par, sol, sim, do_print = False):
     sim_income_before_tax_contrib = sim.income_before_tax_contrib
     sim_e_init = sim.e_init
     sim_e_exogenous = sim.e_state_exogenous
+    sim_s_retirement_contrib = sim.s_retirement_contrib
+    
     efter = par.efter
     # sim_from_employed = sim.from_employed
     # sim_from_unemployed = sim.from_unemployed
     # sim_from_unemployed_to_only_early = sim.from_unemployed_to_only_early
     # sim_from_employed_to_unemployed = sim.from_employed_to_unemployed
     
-    sim_s_retirement_contrib = sim.s_retirement_contrib
+
     
     # sol_ex = sol.ex
     sol_V = sol.V
