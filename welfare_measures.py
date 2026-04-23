@@ -1,7 +1,53 @@
+from types import SimpleNamespace
 import numpy as np
 from scipy.optimize import root_scalar
-from functions_njit import *
+from functions_njit_NVFI import *
 from consav.linear_interp import interp_1d, interp_2d, interp_3d, interp_4d
+import copy
+
+# Weight model
+def get_weighted_model(model, shares_efterloen, shares_inflexible, efterloen_options, flexible_hours_options):
+    models = []
+
+    def append_simulations(target_model, source_model):
+        for key, value in target_model.sim.__dict__.items():
+            source_value = getattr(source_model.sim, key)
+
+            if isinstance(value, np.ndarray):
+                combined = np.concatenate([value, source_value], axis=0)
+                setattr(target_model.sim, key, combined)
+            else:
+                setattr(target_model.sim, key, source_value)
+
+    for index_1, efterloen in enumerate(efterloen_options):
+        for index_2, flexible_hours in enumerate(flexible_hours_options):
+
+            model.par.simN = int(50000 * shares_efterloen[index_1] * shares_inflexible[index_2])
+            model.par.efter = efterloen
+            model.par.flexible_hours = flexible_hours
+
+            model.solve()
+            model.simulate()
+
+            # store only par and sim
+            models.append(
+                SimpleNamespace(
+                    par=copy.deepcopy(model.par),
+                    sim=copy.deepcopy(model.sim),
+                )
+            )
+
+    # create weighted model with only par and sim
+    model_weighted = SimpleNamespace(
+        par=copy.deepcopy(models[0].par),
+        sim=copy.deepcopy(models[0].sim),
+    )
+
+    for m in models[1:]:
+        append_simulations(model_weighted, m)
+
+    return model_weighted
+
 
 # Welfare measurements for simulation 
 def replacement_rate_fct(model):
@@ -141,17 +187,17 @@ def bequest(model, a):
     if par.mu == 0.0:
         return np.zeros_like(a)
     else:
-        return par.mu*(a+par.a_bar)**(1-par.sigma) / (1-par.sigma)
+        return par.mu*((a+par.a_bar)/(par.w_0*par.full_time_hours))**(1-par.sigma) / (1-par.sigma)
 
 def utility_work(model, h, k, t):
     '''Cannot be njited'''
     par = model.par
-    return -(par.zeta/(1+k)) * (h**(1+par.gamma))/(1+par.gamma) - par.gamma_1*h*t**2
+    return - (par.zeta) * (h**(1+par.gamma))/(1+par.gamma) - par.gamma_1*h*(np.exp((t - par.retirement_age)/par.gamma_2))/(1 + np.exp((t - par.retirement_age)/par.gamma_2))
 
 def utility_consumption(model, c):
     '''Cannot be njited'''
     par = model.par
-    return ((1+c)**(1-par.sigma))/(1-par.sigma) 
+    return (((c+1)/(par.w_0*par.full_time_hours))**(1-par.sigma))/(1-par.sigma)
 
 # Expected welfare 
 def expected_lifetime_utility_distribution(model, c, h, a, k):
@@ -225,6 +271,7 @@ def analytical_consumption_equivalence(original_model, EV_new):
         utility_con += pi_beta[t]*np.sum(uc[:,t])
     utility_work_bequest /= par_og.simN
     utility_con /= par_og.simN
+
 
     return ((EV_new-utility_work_bequest)/utility_con)**(1/(1-par_og.sigma))-1 
 

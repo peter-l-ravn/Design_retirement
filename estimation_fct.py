@@ -145,7 +145,7 @@ def simulate_moments(theta, theta_names, model):
             model.simulate()
 
             sim_mean = [
-                np.nan_to_num(np.nanmean(np.where(model.sim.ex == 1, model.sim.h, np.nan), axis=0), nan=0.0),
+                np.nanmean(np.where(model.sim.ex == 1, model.sim.h, np.nan), axis=0),
                 np.mean(model.sim.ex, axis=0),
                 np.mean(model.sim.a, axis=0),
                 np.clip(np.mean(model.sim.s, axis=0), 0, None)
@@ -177,22 +177,27 @@ def obj_func(scaled_theta, theta_names, wealth, extensive, intensive, model, bou
 
         hours_mean, extensive_mean, liquid_mean, _ = calc_means(sim_means, params)
 
-        extensive_idx = extensive["alder"] - 30
-        intensive_idx = intensive["alder"] - 30
-        wealth_idx = wealth["alder"] - 30
+        first_nan_idx = np.flatnonzero(np.isnan(hours_mean))[0]
+        intensive_short = intensive[intensive["alder"] < first_nan_idx + 30]
 
-        moment_mean = np.concatenate([extensive["mean_extensive"], wealth["mean_wealth"], intensive["mean_intensive"]])
+        extensive_idx = extensive["alder"] - 30
+        wealth_idx = wealth["alder"] - 30
+        intensive_idx = intensive_short["alder"] - 30
+
+        moment_mean = np.concatenate([extensive["mean_extensive"], wealth["mean_wealth"], intensive_short["mean_intensive"]])
 
 
         # variance_cut = np.concatenate([extensive["se_extensive"]**2, 
         #                             wealth["se_wealth"]**2, 
         #                             intensive["se_intensive"]**2])
 
+        mean_se = True  
+
         if mean_se:
             se = np.concatenate([
                 np.full(len(extensive["mean_extensive"]), np.nanmean(extensive["mean_extensive"])**2 / 2),
                 np.full(len(wealth["mean_wealth"]), np.nanmean(wealth["mean_wealth"])**2),
-                np.full(len(intensive["mean_intensive"]), np.nanmean(intensive["mean_intensive"])**2 / 4)
+                np.full(len(intensive_short["mean_intensive"]), np.nanmean(intensive_short["mean_intensive"])**2 / 4)
             ])
 
             var = se
@@ -201,7 +206,7 @@ def obj_func(scaled_theta, theta_names, wealth, extensive, intensive, model, bou
             se = np.concatenate([
                 extensive["se_extensive"],
                 wealth["se_wealth"],
-                intensive["se_intensive"]
+                intensive_short["se_intensive"]
             ])
 
             var = se**2
@@ -227,7 +232,15 @@ def obj_func(scaled_theta, theta_names, wealth, extensive, intensive, model, bou
         p01 = (1 - efterloen_share) * flexible_share
         p00 = (1 - efterloen_share) * (1 - flexible_share)
 
-        hours_mean              = p11*sim_means[0][0] + p10*sim_means[1][0] + p01*sim_means[2][0] + p00*sim_means[3][0]
+        weights = np.array([p11, p10, p01, p00])
+        values = np.array([sim_means[0][0], sim_means[1][0], sim_means[2][0], sim_means[3][0]])
+
+        mask = ~np.isnan(values)
+        weighted_sum = np.nansum(weights[:, None] * values, axis=0)
+        weight_sum = np.sum(weights[:, None] * mask, axis=0)
+
+        hours_mean = np.divide(weighted_sum, weight_sum, out=np.full_like(weighted_sum, np.nan, dtype=float), where=weight_sum != 0)
+        hours_mean[weight_sum == 0] = np.nan
         extensive_mean          = p11*sim_means[0][1] + p10*sim_means[1][1] + p01*sim_means[2][1] + p00*sim_means[3][1]
         liquid_mean             = p11*sim_means[0][2] + p10*sim_means[1][2] + p01*sim_means[2][2] + p00*sim_means[3][2]
         illiquid_mean           = p11*sim_means[0][3] + p10*sim_means[1][3] + p01*sim_means[2][3] + p00*sim_means[3][3]
